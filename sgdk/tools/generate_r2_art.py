@@ -17,8 +17,11 @@ ASSETS = {
 }
 
 for name, expected in ASSETS.items():
-    source = SRC / f"{name}.b64"
-    data = base64.b64decode(source.read_text(encoding="ascii").strip(), validate=True)
+    if name == "r2_menu_bg.png":
+        encoded = "".join((SRC / f"{name}.b64.{i:02d}").read_text(encoding="ascii").strip() for i in range(4))
+    else:
+        encoded = (SRC / f"{name}.b64").read_text(encoding="ascii").strip()
+    data = base64.b64decode(encoded, validate=True)
     actual = hashlib.sha256(data).hexdigest()
     if actual != expected:
         raise SystemExit(f"R2 asset hash mismatch: {name}: {actual} != {expected}")
