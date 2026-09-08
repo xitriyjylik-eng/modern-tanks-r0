@@ -6,25 +6,24 @@ ART = ROOT / "art"
 RES = ROOT / "res"
 RES.mkdir(parents=True, exist_ok=True)
 
-# R2 reference-faithful assets are prepared once from the project's locked
-# MAIN_MENU_REFERENCE.png and TANKS_DETAILED_REFERENCE.png, then stored here
-# as deterministic text-safe payloads for GitHub/CI. The locked references
-# themselves are never modified by the build.
-assets = {
-    "r2_menu_bg.png": "r2_menu_bg.png.b64",
-    "r2_sel_0.png": "r2_sel_0.png.b64",
-    "r2_sel_1.png": "r2_sel_1.png.b64",
-    "r2_sel_2.png": "r2_sel_2.png.b64",
-    "r2_sel_3.png": "r2_sel_3.png.b64",
-}
-
-for out_name, src_name in assets.items():
-    payload = (ART / src_name).read_text(encoding="ascii")
-    # MIME/base64 whitespace is legal; remove it before strict validation so
-    # the decoded bytes remain deterministic while GitHub line endings do not matter.
+# The locked project reference PNGs are never modified by the build. The
+# approved Mega Drive adaptation is stored as deterministic text-safe payloads.
+def decode_text_payload(parts, out_name):
+    payload = "".join((ART / name).read_text(encoding="ascii") for name in parts)
     payload = "".join(payload.split())
-    print("decode", src_name, "chars", len(payload))
+    print("decode", out_name, "chars", len(payload), "parts", len(parts))
     data = base64.b64decode(payload, validate=True)
     (RES / out_name).write_bytes(data)
+
+# Background is split only to keep GitHub connector text writes lossless.
+decode_text_payload([
+    "r2_menu_bg.png.b64.00",
+    "r2_menu_bg.png.b64.01",
+    "r2_menu_bg.png.b64.02",
+    "r2_menu_bg.png.b64.03",
+], "r2_menu_bg.png")
+
+for i in range(4):
+    decode_text_payload([f"r2_sel_{i}.png.b64"], f"r2_sel_{i}.png")
 
 print("decoded reference-faithful R2 assets", RES)
