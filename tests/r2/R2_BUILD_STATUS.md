@@ -2,71 +2,69 @@
 
 Дата: **2026-09-08**
 
-Статус: **TANK REFERENCE FIX — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**
-
-## Stage
-
-R2 Main Menu Visual Target.
+Статус: **FOCUSED MENU / TANK REFERENCE REWORK — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**
 
 R0 и R1 остаются ACCEPTED / CLOSED. R3 не начинать до отдельного принятия R2 владельцем проекта.
 
-## История R2
+## Решение владельца по компоновке
 
-Первый R2 candidate был визуально отклонён как слишком упрощённый относительно `references/MAIN_MENU_REFERENCE.png`.
+После target-проверки предыдущего R2 владелец отдельно уточнил:
 
-Visual Rework / Max Detail существенно повысил плотность меню, но владелец повторно указал на критический дефект: танки оставались условными пиктограммами и не соответствовали официальному `references/TANKS_DETAILED_REFERENCE.png`.
+- нижний блок `T-1..T-4 / параметры / карта` из главного меню убрать;
+- он не выполнял игровой функции и перегружал экран;
+- выбор и характеристики танка относятся к `ГАРАЖ`;
+- карта/миссионная информация относятся к игровым/миссионным экранам;
+- декоративный движущийся танк в главном меню убрать полностью.
 
-Поэтому предыдущий ROM также не считать финальным acceptance candidate.
+## Танки
 
-## Текущий кандидат — Tank Reference Fix
+`references/TANKS_DETAILED_REFERENCE.png` остаётся обязательным художественным эталоном.
 
-Перед исправлением непосредственно перечитан `references/TANKS_DETAILED_REFERENCE.png`.
+Текущий R2 использует вручную нарисованные native-pixel модели вместо простых иконок:
 
-В R2 теперь перенесён его визуальный язык в реальном Mega Drive-разрешении:
+- строгий вид сверху;
+- отдельные гусеницы и сегменты траков;
+- сформированный бронекорпус;
+- башня и башенное кольцо;
+- маска орудия + длинный ствол;
+- люк/командирская башенка;
+- моторная палуба/бортовые модули;
+- различимые силуэты T-1 разведчик, T-2 рейнджер, T-3 крепость, T-4 штурмовик.
 
-- танки строго сверху;
-- отдельные гусеницы с сегментацией;
-- бронекорпус с формой/скосами;
-- башня и погон;
-- маска орудия и полноценный ствол;
-- люк, болты, engine deck и боковые модули там, где позволяет размер;
-- T-1 зелёный узкий разведчик;
-- T-2 синий универсальный;
-- T-3 самый широкий тяжёлый «крепость» с толстым орудием;
-- T-4 красный угловатый штурмовик;
-- фоновые battlefield tanks также переработаны;
-- moving 16×16 menu tank также переработан.
+Locked reference PNG не изменён и не встроен в ROM.
 
-Reference PNG не изменялся, не перекодировался и не встраивался как готовая текстура. Granada assets/code не использованы. Старая DEV-линия не используется.
+## Текущий экран
 
-## GitHub Actions — PASS
+- native 320×224;
+- металлический `MODERN TANKS`;
+- `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
+- поле боя продолжается до нижнего края экрана;
+- река, дороги, лес, укрепления, кратеры, выстрелы/дым;
+- вручную прорисованные статичные танки на поле;
+- единственная текущая декоративная анимация UI — pulse активной строки selector.
 
-- repository: `xitriyjylik-eng/modern-tanks-r0`;
-- build commit: `acba3abbf58fd3d1666617d51431c2b5f31eab43`;
-- GitHub Actions run: `34185523022`;
-- job: `build-r2` — SUCCESS;
-- SGDK: 2.11;
-- generated-art validation: PASS;
-- source/locked-art contract: PASS;
-- build A: PASS;
-- build B: PASS;
-- byte-for-byte reproducibility: PASS;
+## CI PASS
+
+- GitHub Actions run: `34186426856`;
+- tested commit: `831cd8348997cdb13e82cfc8422c6748f3e0e0b1`;
+- SGDK 2.11 build A/B: PASS, byte-identical;
 - independent ROM audit: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `5b73a0e9a1d7c8efb28541631cf09580790c0496d7b60634db41543b3ad586d9`;
-- header checksum: `0x647E`;
-- required checksum: `0x647E`;
-- full-ROM XOR-fold: `0x0000`.
+- ROM SHA-256: `d4baf97f7884ae0e91be0bc599d11046959fae88407c2db7235dd37726dc47f4`;
+- header checksum: `0x6DF1`;
+- XOR-fold: `0x0000`.
 
-Подробный отчёт по коррекции: `tests/r2/R2_TANK_REFERENCE_FIX.md`.
+## Resource budget
+
+- background: 950 unique 8×8 tiles before ResComp optimization;
+- selector worst case: 24 unique tiles;
+- conservative simultaneous upper bound: 974 tiles / 31,168 bytes;
+- free against project 44 KiB pattern ceiling: 13,888 bytes;
+- moving tank resource: removed;
+- menu VDP sprite payload: 0.
 
 ## Gate
 
-Нужен фактический запуск текущего ROM владельцем в MD Emu Games Gen и визуальное сравнение с обоими locked references:
+R2 остаётся **TARGET PENDING** до фактической проверки владельцем.
 
-- `references/MAIN_MENU_REFERENCE.png` — композиция меню;
-- `references/TANKS_DETAILED_REFERENCE.png` — дизайн и читаемость танков.
-
-Проверить также ИГРАТЬ/ГАРАЖ, возврат B и отсутствие corruption/ERR.
-
-**R2 НЕ ACCEPTED. R3 BLOCKED.**
+**R3 BLOCKED.**
