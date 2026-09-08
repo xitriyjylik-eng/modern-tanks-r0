@@ -1,8 +1,6 @@
 # MODERN TANKS — START HERE NEXT SESSION
 
-## Сначала
-
-Прочитать:
+## Сначала прочитать
 
 1. `SESSION_HANDOFF_CURRENT.md`
 2. `plan/REBUILD_MASTER_PLAN.md`
@@ -14,46 +12,46 @@
 
 ## Текущая точка
 
-- **R0 Hardware Probe — ACCEPTED / CLOSED (2026-09-08).**
-- **R1 Core / State Machine — FUNCTIONAL TARGET PASS / CLEANUP RETEST PENDING.**
-- **R2 — BLOCKED до чистого пользовательского PASS R1.**
+- **R0 Hardware Probe — ACCEPTED / CLOSED.**
+- **R1 Core / State Machine — FUNCTIONAL TARGET PASS / FIX2 CI PASS / TARGET RETEST PENDING.**
+- **R2 — BLOCKED до clean R1 target PASS.**
 
-## Неизменяемые требования
+## Инварианты
 
-- идея Modern Tanks сохраняется без изменений;
-- `design/GAME_DESIGN_FROZEN.md` остаётся источником истины;
-- три PNG reference нельзя изменять, перекодировать или заменять;
-- Granada — только технический ориентир, не donor-ROM;
-- старая DEV-линия, DEV ROM/builders/master-plan запрещены;
-- ROM собирается штатным SGDK 2.11 toolchain.
+- идея Modern Tanks не меняется;
+- `design/GAME_DESIGN_FROZEN.md` — game-design truth;
+- три PNG reference не изменять/не перекодировать/не заменять;
+- Granada — только технический образец Mega Drive;
+- старая DEV-линия запрещена;
+- build только через clean SGDK 2.11 path.
 
-## R0 — закрыт
+## Почему R1 ещё не закрыт
 
-Пользователь лично проверил R0 в MD Emu Games Gen на Android: стабильный запуск и изображение, R0A PASS, R0B PASS, D-Pad и A/B/C/START PASS. X/Y/Z не являются требованием, потому что R0 использует 3-button controller path.
+Пользователь уже подтвердил, что меню, TEST_BATTLE, GARAGE, возвраты и rendering работают. Но debug self-check дважды показал `PALETTE_RESIDUE`.
 
-## R1 — первый target-test
+FIX1 с одним FIFO drain не помог: screenshots показали `ERR:07` и `ERR:09`.
 
-Пользователь подтвердил, что R1 визуально и по переходам работает. Но screenshots показали `LAST ERROR: PALETTE_RESIDUE` и рост ERR вместе с TRANS, поэтому формальный gate не закрыт.
+## Текущий FIX2
 
-Исправлен порядок CRAM cleanup/readback:
+Commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`.
 
-- fix commit `16ea3ccad96b51e0514e88076ee6c4f00b752098`;
-- GitHub Actions run `34177478564` — SUCCESS;
-- ROM 131072 bytes;
-- SHA-256 `0798b55ea287dc991a896ae67c94d1afa8640a50f85366ab765809ff316cc713`;
-- header checksum `0x8B8E`;
+GitHub Actions run `34178302167` — SUCCESS.
+
+- ROM: 131072 bytes;
+- SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
+- header checksum: `0xAC94`;
 - verifier PASS;
-- две clean SGDK builds идентичны byte-for-byte.
+- build A/B byte-identical.
+
+FIX2 переводит весь state teardown/setup в короткую blanked VDP transaction: display OFF → cleanup/readback → next bank/draw → display ON.
 
 ## Следующее действие
 
-Только повторно проверить FIX1 ROM в MD Emu Games Gen. До запуска soak обычные переходы не должны увеличивать ERR. Затем в MAIN MENU нажать C и дождаться:
+Проверить только FIX2 ROM в MD Emu Games Gen.
 
-- `SOAK: PASS 100/100`;
-- `ERR:00`;
-- `STATE: MAIN_MENU`;
-- `BANK: MENU`.
+1. Несколько раз пройти `MENU → TEST_BATTLE → MENU → GARAGE → MENU` — `ERR` должен оставаться `00`.
+2. В MAIN_MENU нажать C.
+3. Дождаться `SOAK: PASS 100/100`, `ERR:00`, `STATE: MAIN_MENU`, `BANK: MENU`.
+4. После soak снова проверить manual input.
 
-После soak снова проверить D-Pad/A/B/C/START.
-
-**Не начинать R2 до прямого подтверждения чистого R1 PASS.**
+**R2 не начинать до прямого подтверждения пользователя этого clean PASS.**
