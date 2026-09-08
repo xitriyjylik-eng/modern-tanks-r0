@@ -1,0 +1,76 @@
+       x=201+k*7
+        col=I(3,11 if k<val else 3)
+        d.rectangle([x,y+2,x+5,y+5],fill=col)
+
+# minimap
+d.rectangle([244,180,315,214],fill=I(3,2),outline=I(3,6))
+# land grid variation
+for yy in range(183,212,4):
+    for xx in range(247,313,4):
+        v=(xx*3+yy*5)//4
+        col=[I(3,10),I(3,10),I(3,11),I(3,4)][v%4]
+        d.rectangle([xx,yy,xx+3,yy+3],fill=col)
+# river on minimap
+pts=[]
+for yy in range(182,214):
+    xx=279+int(8*math.sin(yy/8))
+    d.line([xx-4,yy,xx+4,yy],fill=I(3,13))
+# walls and units
+for x,y in [(251,188),(301,196),(258,205),(294,184)]:
+    d.rectangle([x,y,x+4,y+2],fill=I(3,14))
+for x,y in [(263,192),(306,205)]:
+    d.rectangle([x,y,x+3,y+3],fill=I(3,15))
+# viewport
+d.rectangle([274,188,289,203],outline=I(3,9))
+# bottom status line
+d.line([2,216,317,216],fill=I(3,4))
+ptext(6,217,"© 1994 MODERN TANKS",I(3,7),1,1)
+ptext(126,217,"НАЖМИ START",I(3,15),1,1)
+ptext(276,217,"16-BIT",I(3,7),1,1)
+
+# -------- enforce palette owner per tile --------
+allrgb=[c for pal in pals for c in pal]
+pix=img.load()
+for ty in range(28):
+    for tx in range(40):
+        p=owner[ty][tx]
+        allowed=pals[p]
+        for yy in range(ty*8,min(ty*8+8,H)):
+            for xx in range(tx*8,min(tx*8+8,W)):
+                old=pix[xx,yy]
+                oldrgb=allrgb[old] if old<64 else (0,0,0)
+                if old//16 != p:
+                    best=min(range(16),key=lambda i:sum((allowed[i][k]-oldrgb[k])**2 for k in range(3)))
+                    pix[xx,yy]=I(p,best)
+
+img.save(os.path.join(OUT,"r2_menu_bg.png"), optimize=False)
+
+# Selector overlays, 112x16, PAL2. Transparent index 0.
+for n,lab in enumerate(labels):
+    ov=Image.new("P",(104,16),I(2,0)); ov.putpalette(palette)
+    od=ImageDraw.Draw(ov)
+    # temporary redirect drawing to overlay
+    global_d=d
+    d=od
+    od.rectangle([0,0,103,15],fill=I(2,2),outline=I(2,13))
+    od.rectangle([2,2,101,13],outline=I(2,12))
+    od.polygon([(2,8),(7,3),(7,13)],fill=I(2,13))
+    od.polygon([(101,8),(96,3),(96,13)],fill=I(2,13))
+    icons[n](5,1,True)
+    tx=25 if n<2 else (20 if n==2 else 17)
+    ptext(tx,4,lab,I(2,13),1,1,shadow=I(2,1),shadow_off=(1,1))
+    d=global_d
+    ov.save(os.path.join(OUT,f"r2_sel_{n}.png"), optimize=False)
+
+# 16x16 animated tank overlay in PAL0, transparent index 0.
+ov=Image.new("P",(16,16),I(0,0)); ov.putpalette(palette)
+od=ImageDraw.Draw(ov)
+od.rectangle([1,4,13,11],fill=I(0,1))
+od.rectangle([2,5,12,10],fill=I(0,4))
+od.rectangle([5,2,9,7],fill=I(0,5))
+od.rectangle([9,4,15,5],fill=I(0,15))
+od.line([2,12,12,12],fill=I(0,0))
+od.point((3,6),fill=I(0,15))
+ov.save(os.path.join(OUT,"r2_anim_tank.png"), optimize=False)
+
+print("generated", OUT)

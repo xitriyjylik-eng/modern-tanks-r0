@@ -1,0 +1,28 @@
+l=False):
+    c=I(2,13 if sel else 8)
+    d.rectangle([x+1,y+8,x+3,y+12],fill=c)
+    d.rectangle([x+5,y+5,x+7,y+12],fill=c)
+    d.rectangle([x+9,y+1,x+11,y+12],fill=c)
+def icon_gear(x,y,sel=False):
+    c=I(2,13 if sel else 8)
+    d.rectangle([x+4,y+2,x+9,y+11],fill=c)
+    d.rectangle([x+1,y+5,x+12,y+8],fill=c)
+    d.rectangle([x+3,y+3,x+10,y+10],outline=c)
+    d.rectangle([x+5,y+5,x+8,y+8],fill=I(2,1))
+icons=[icon_tank,icon_wrench,icon_bars,icon_gear]
+
+for i,(lab,y) in enumerate(zip(labels,row_y)):
+    d.rectangle([112,y,215,y+15],fill=I(2,2))
+    d.rectangle([112,y,215,y+15],outline=I(2,5))
+    icons[i](115,y+1,False)
+    # fit long words at 1x; slight variable x
+    tx=135 if i<2 else (130 if i==2 else 127)
+    ptext(tx,y+4 if i<2 else y+4,lab,I(2,9),1,1)
+# footer in menu
+d.rectangle([104,144,215,159],fill=I(2,2))
+ptext(107,148,"БРОНЯ • ТАКТИКА • ПОБЕДА",I(2,7),1,0)
+# bottom bevel band
+d.line([104,162,215,162],fill=I(2,6))
+d.line([105,164,214,164],fill=I(2,3))
+
+# -------- lower HUD P
