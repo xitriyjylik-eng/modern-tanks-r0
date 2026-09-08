@@ -1,0 +1,1 @@
+Temporary connector workaround note: R2 art sources are text-safe/reproducible because direct binary file writes through the chat GitHub connector are not reliable. Do not change locked reference PNG files.
