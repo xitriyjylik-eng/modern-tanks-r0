@@ -1,12 +1,1 @@
-6],fill=I(3,0))
-        d.rectangle([cx-6,cy-5,cx+7,cy+5],fill=body)
-        d.ellipse([cx-3,cy-4,cx+3,cy+2],fill=hi)
-        d.rectangle([cx+2,cy-2,cx+11,cy],fill=hi)
-    elif kind==2:
-        d.rectangle([cx-10,cy-7,cx+10,cy+7],fill=I(3,0))
-        d.rectangle([cx-7,cy-6,cx+8,cy+6],fill=body)
-        d.rectangle([cx-4,cy-4,cx+4,cy+3],fill=hi)
-        d.rectangle([cx+3,cy-2,cx+12,cy],fill=hi)
-    else:
-        d.rectangle([cx-8,cy-5,cx+9,cy+5],fill=I(3,0))
-        d.polygon([(cx-7,cy-4),(cx+6,c
+# superseded by reference-driven tank card implementation in part05b
