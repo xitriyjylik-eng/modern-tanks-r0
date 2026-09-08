@@ -2,7 +2,7 @@
 #include "resources.h"
 
 /*
- * Modern Tanks R2 — Main Menu Visual Target
+ * Modern Tanks R2 — Main Menu Visual Target / Visual Rework 1
  * Clean SGDK rebuild only. R1 core is accepted and preserved.
  * No old DEV code. No Granada assets/code. Reference PNG is not embedded.
  */
@@ -36,8 +36,8 @@ typedef struct
 #define R2_LOGIC_HZ 60
 #define R2_BOOT_TICKS 60
 #define R2_MENU_COUNT 4
-#define R2_SELECTOR_X 12
-#define R2_SELECTOR_W 17
+#define R2_SELECTOR_X 14
+#define R2_SELECTOR_W 13
 #define R2_SELECTOR_H 2
 #define R2_ANIM_Y 3
 
@@ -71,6 +71,32 @@ static const Image *selectorImages[R2_MENU_COUNT] =
     &r2_sel_2,
     &r2_sel_3
 };
+
+static const char *state_name(GameState state)
+{
+    switch (state)
+    {
+        case STATE_BOOT: return "BOOT";
+        case STATE_TITLE: return "TITLE";
+        case STATE_MAIN_MENU: return "MAIN_MENU";
+        case STATE_TEST_BATTLE: return "TEST_BATTLE";
+        case STATE_GARAGE: return "GARAGE";
+        default: return "INVALID";
+    }
+}
+
+static const char *bank_name(ResourceBank bank)
+{
+    switch (bank)
+    {
+        case BANK_NONE: return "NONE";
+        case BANK_CORE: return "CORE";
+        case BANK_MENU: return "MENU";
+        case BANK_BATTLE_SHELL: return "BATTLE";
+        case BANK_GARAGE_SHELL: return "GARAGE";
+        default: return "INVALID";
+    }
+}
 
 static ResourceBank state_bank(GameState state)
 {
