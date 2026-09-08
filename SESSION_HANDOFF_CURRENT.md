@@ -25,11 +25,19 @@ CI R0:
 - SHA-256 `1b5de098a33a0ac54256c8680acc0440bdec76ae5c74fa2551bff7050b24ef11`;
 - verifier PASS.
 
-## 3. Текущий milestone — R1 Core / State Machine
+## 3. R1 Core / State Machine — ACCEPTED / CLOSED
 
-Статус: **FUNCTIONAL TARGET PASS / FIX2 CI PASS / TARGET RETEST PENDING**.
+Финальный accepted source: FIX2.
 
-R1 scope:
+- source commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`;
+- GitHub Actions run: `34178302167` — SUCCESS;
+- ROM: 131072 bytes;
+- SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
+- header checksum: `0xAC94`;
+- two clean SGDK 2.11 builds: byte-identical;
+- independent ROM verifier: PASS.
+
+### R1 scope, который теперь считается доказанным
 
 - BOOT;
 - TITLE;
@@ -42,96 +50,52 @@ R1 scope:
 - debug/error layer;
 - state enter/leave hooks;
 - ResourceBank load/unload API;
+- cleanup BG_A/B, WINDOW, scroll, sprites и CRAM;
 - 100-transition soak.
 
-R2 art/gameplay не входят в R1.
+### История palette self-check
 
-## 4. Что пользователь уже подтвердил по R1
+Исходный R1 и FIX1 функционально работали, но target screenshots показывали ложный `PALETTE_RESIDUE` при state teardown. FIX2 перевёл teardown/setup в короткую blanked VDP transaction, после чего defect исчез.
 
-В MD Emu Games Gen функционально работают:
+### Финальный target-test FIX2
 
-- MAIN_MENU navigation;
-- вход в TEST_BATTLE;
-- возврат B;
-- вход в GARAGE;
-- возврат B;
-- state/bank switching;
-- rendering без видимого crash/corruption.
+Владелец проекта проверил FIX2 в MD Emu Games Gen на Android и предоставил screenshots.
 
-Но два target test выявили внутренний `PALETTE_RESIDUE` self-check.
+Подтверждено:
 
-### Исходный R1
-
-- TEST_BATTLE: `TRANS:003 ERR:03`;
-- GARAGE: `TRANS:005 ERR:05`.
-
-### FIX1
-
-После FIFO-drain исправления defect сохранился:
-
-- TEST_BATTLE: `TRANS:007 ERR:07`;
-- GARAGE: `TRANS:009 ERR:09`.
-
-Значит проблема была не в пользовательском управлении и не в видимой картинке. Ненадёжной была сама CRAM cleanup/readback транзакция при active display.
-
-Полная история: `tests/r1/R1_TARGET_TEST_2026-09-08.md`.
-
-## 5. FIX2
-
-Source commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`.
-
-State transition теперь выполняется как blanked video transaction:
-
-1. `VDP_setEnable(FALSE)`;
-2. FIFO drain;
-3. state leave;
-4. BG_A/B/WINDOW + scroll + VDP sprites teardown;
-5. all 64 CRAM entries → black;
-6. CRAM readback with interrupts masked;
-7. next bank load + state draw;
-8. FIFO drain;
-9. `VDP_setEnable(TRUE)`.
-
-Это соответствует SGDK-подходу к безопасным крупным video-memory reset operations: не пытаться проверять CRAM во время active visible scanout.
-
-### FIX2 CI
-
-GitHub Actions run `34178302167` — **SUCCESS**.
-
-- source contract: PASS;
-- build A/B: PASS;
-- byte-for-byte reproducibility: PASS;
-- independent ROM verifier: PASS;
-- ROM size: `131072` bytes;
-- SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
-- header checksum: `0xAC94`;
-- required checksum: `0xAC94`;
-- full-ROM XOR-fold: `0x0000`.
-
-## 6. Следующий обязательный target test
-
-Проверить только FIX2 ROM.
-
-Сначала несколько ручных переходов:
-
-`MAIN_MENU → TEST_BATTLE → MAIN_MENU → GARAGE → MAIN_MENU`.
-
-`ERR` должен оставаться `00`.
-
-Затем C в MAIN_MENU запускает 100-transition soak. Обязательный финал:
-
+- ручные переходы MENU / TEST_BATTLE / GARAGE работают;
+- `ERR:00` после ручных переходов;
 - `SOAK: PASS 100/100`;
-- `ERR:00`;
-- `STATE: MAIN_MENU`;
-- `BANK: MENU`;
-- manual input продолжает работать.
+- после soak `STATE: MAIN_MENU`;
+- после soak `BANK: MENU`;
+- после soak `ERR:00`;
+- финальный screenshot показывает `TRANS:114`, то есть после автоматических 100 переходов ручная работа продолжалась без накопления ошибок.
 
-До этого R1 **НЕ ACCEPTED**.
+`LAST ERROR: R1_ITEM_NOT_IMPLEMENTED` при `ERR:00` не является runtime error: это информационная строка после нажатия на намеренно заблокированный R1-пункт `STATISTICS` или `OPTIONS`; `errorCount` она не увеличивает.
 
-## 7. Что не трогать
+Полный результат: `tests/r1/R1_ACCEPTANCE_RESULT.md`.
+
+## 4. Текущий milestone — R2 MAIN MENU VISUAL TARGET
+
+Статус: **UNLOCKED / NOT STARTED**.
+
+R2 разрешён только потому, что R1 теперь ACCEPTED/CLOSED. В acceptance commit R2 код/графика не добавлялись.
+
+Перед началом R2 обязательно перечитать:
+
+- `plan/REBUILD_MASTER_PLAN.md`, раздел R2;
+- `plan/ACCEPTANCE_GATES.md`;
+- `design/GAME_DESIGN_FROZEN.md`;
+- `references/MAIN_MENU_REFERENCE.png` как locked visual target;
+- technical документы по Mega Drive/VRAM/Granada.
+
+R2 должен делать визуальное меню Modern Tanks максимально близким по композиции к `MAIN_MENU_REFERENCE.png`, но не менять game-design/navigation semantics. Granada остаётся только техническим образцом.
+
+## 5. Что не трогать
 
 - три PNG reference — LOCKED;
 - `design/GAME_DESIGN_FROZEN.md` — не менять смысл игры;
 - Granada — только technical reference;
-- старый DEV — запрещён;
-- R2 — не начинать до clean R1 target PASS.
+- старый DEV — запрещён.
+
+Следующая работа должна начинаться строго с анализа требований R2, без перехода к R3 до отдельного acceptance R2.

@@ -32,30 +32,53 @@
 - A/B/C/START — PASS;
 - X/Y/Z не являются требованием R0, так как probe принудительно использует `JOY_SUPPORT_3BTN`.
 
-Владелец проекта явно объявил R0 полностью ACCEPTED. R0 закрыт и больше не блокирует R1.
+R0 закрыт и больше не блокирует следующие стадии.
 
-## R1 — BUILD/CI PASS / TARGET NOT YET ACCEPTED
+## R1 — ACCEPTED / CLOSED — 2026-09-08
 
-CI status: GitHub Actions run `34176727527` — SUCCESS; две clean SGDK 2.11 сборки идентичны; ROM audit PASS; SHA-256 `4fdc8d3d8ef9f723caf228b61f183b1fea927bee93727028f6e0a414cf6a726a`.
+Финальный accepted ROM: FIX2.
 
-Build/CI PASS не равен acceptance. Target-test остаётся обязательным.
+CI:
 
-Gate: 100 последовательных переходов
+- source commit `bc858a619de76a1f5c3112859914ea132e9bf7be`;
+- GitHub Actions run `34178302167` — SUCCESS;
+- две clean SGDK 2.11 сборки идентичны byte-for-byte;
+- ROM audit PASS;
+- ROM SHA-256 `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`.
+
+Target gate требовал 100 последовательных переходов
 
 `MENU → TEST_BATTLE → MENU → GARAGE → MENU`
 
-повторённых 25 раз, без:
+повторённых 25 раз, без VRAM corruption, leaked sprites, зависаний, потерянного input и palette residue.
 
-- VRAM corruption;
-- leaked sprites;
-- зависаний;
-- потерянного input;
-- palette residue.
+Фактический target-result в MD Emu Games Gen:
 
-R1 должен быть проверен пользователем в MD Emu Games Gen. До прямого подтверждения пользователя **R2 BLOCKED**.
+- обычные переходы работают;
+- `ERR:00` после ручных переходов;
+- `SOAK: PASS 100/100`;
+- финал `STATE: MAIN_MENU`;
+- финал `BANK: MENU`;
+- финал `ERR:00`;
+- после soak пользователь продолжил ручные переходы; финальный screenshot показывает `TRANS:114`, `ERR:00`.
 
-## R2
+`LAST ERROR: R1_ITEM_NOT_IMPLEMENTED` при `ERR:00` не считается gate defect: это информационная строка при выборе intentionally locked R1 item и она не увеличивает `errorCount`.
+
+Итог: **R1 ACCEPTED / CLOSED. R2 UNLOCKED.**
+
+## R2 — UNLOCKED / NOT STARTED
+
 Menu visual conformance.
+
+Gate R2:
+
+- screen comparison с `references/MAIN_MENU_REFERENCE.png`;
+- нет пустых placeholder-панелей;
+- нет автоматически уменьшенной грязной графики;
+- menu bank полностью выгружается при переходе в battle;
+- free VRAM зафиксирована в отчёте.
+
+R3 не начинать до отдельного R2 acceptance.
 
 ## R3
 Scrolling/HUD/window stability.

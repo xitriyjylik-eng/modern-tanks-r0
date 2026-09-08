@@ -35,8 +35,9 @@ Granada используется как технический ориентир.
 ## Текущий статус стадий — 2026-09-08
 
 - **R0 HARDWARE PROBE — ACCEPTED / CLOSED.** SGDK CI PASS; пользователь лично проверил ROM в MD Emu Games Gen: стабильный запуск, корректное изображение, R0A PASS, R0B PASS, D-Pad и A/B/C/START PASS. X/Y/Z не входят в R0, потому что R0 использует обязательный 3-button path.
-- **R1 CORE / STATE MACHINE — BUILD/CI PASS / TARGET ACCEPTANCE PENDING.** Core/menu shell реализован; GitHub Actions run `34176727527` SUCCESS, ROM audit PASS. Target gate ещё не закрыт.
-- **R2 и далее — BLOCKED** до прямого подтверждения пользователем R1.
+- **R1 CORE / STATE MACHINE — ACCEPTED / CLOSED.** Финальный FIX2 прошёл SGDK CI и target gate: ручные переходы PASS, `ERR:00`, `SOAK: PASS 100/100`, финал `STATE: MAIN_MENU`, `BANK: MENU`; после soak пользователь продолжил работу до `TRANS:114` без ошибок.
+- **R2 MAIN MENU VISUAL TARGET — UNLOCKED / NOT STARTED.** Это следующая стадия.
+- **R3 и далее — BLOCKED** до отдельного acceptance R2.
 
 Старая DEV-линия по-прежнему запрещена. Granada остаётся только техническим образцом.
 
@@ -83,6 +84,8 @@ PASS только если:
 
 # 3. R1 — CORE / STATE MACHINE
 
+**Статус: ACCEPTED / CLOSED — 2026-09-08.**
+
 ## Реализовать
 
 - BOOT;
@@ -97,17 +100,16 @@ PASS только если:
 - clean state enter/leave hooks;
 - resource bank load/unload API.
 
-### Текущий R1 build — 2026-09-08
+### Финальный accepted R1 build
 
-- source commit: `d348e0518bfe74d47da6db705313e4a26c0fc891`;
-- GitHub Actions run: `34176727527`;
+- source commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`;
+- GitHub Actions run: `34178302167`;
 - build A/B: PASS и byte-for-byte identical;
 - ROM audit: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `4fdc8d3d8ef9f723caf228b61f183b1fea927bee93727028f6e0a414cf6a726a`;
-- target acceptance: PENDING.
-
-Успешный CI не закрывает R1. R2 остаётся заблокирован до прямого пользовательского PASS.
+- ROM SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
+- header checksum: `0xAC94`;
+- target acceptance: PASS.
 
 ## Gate R1
 
@@ -123,9 +125,22 @@ PASS только если:
 - потерянного input;
 - palette residue.
 
+Фактический target-result FIX2:
+
+- ручные переходы PASS;
+- `ERR:00`;
+- `SOAK: PASS 100/100`;
+- финал `STATE: MAIN_MENU`;
+- финал `BANK: MENU`;
+- после soak пользователь продолжил переходы до `TRANS:114` при `ERR:00`.
+
+Полный отчёт: `tests/r1/R1_ACCEPTANCE_RESULT.md`.
+
 ---
 
 # 4. R2 — MAIN MENU VISUAL TARGET
+
+**Статус: UNLOCKED / NOT STARTED.**
 
 ## Источник истины
 
@@ -484,10 +499,17 @@ Checksum сам по себе никогда больше не считаетс�
 
 # 16. Текущий следующий практический шаг
 
-R0 закрыт. Текущая стадия — **R1 CORE / STATE MACHINE**.
+R0 и R1 закрыты как **ACCEPTED / CLOSED**.
 
-R1 source и CI build уже готовы. Следующий шаг — только target-проверка R1 ROM по `tests/r1/R1_ACCEPTANCE_CHECKLIST.md`.
+Следующая стадия — **R2 MAIN MENU VISUAL TARGET**.
 
-Визуальную цель меню из R2, боевой renderer, танки, карту, AI, SRAM и audio сейчас не добавлять.
+Перед реализацией R2 сначала подробно сверить его требования с:
 
-**R2 остаётся запрещён до прямого подтверждения пользователя, что R1 принят.**
+- `references/MAIN_MENU_REFERENCE.png`;
+- `design/GAME_DESIGN_FROZEN.md`;
+- `plan/ACCEPTANCE_GATES.md`;
+- техническими документами Mega Drive/VRAM/Granada.
+
+Идею Modern Tanks не менять, три PNG не изменять, Granada использовать только как технический образец, старый DEV не возвращать.
+
+**R3 остаётся запрещён до отдельного подтверждения R2.**
