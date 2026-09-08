@@ -1,4 +1,4 @@
-name: R2 Refined Ambient Animation SGDK CI
+name: R2 River-Course Flag Fire Trees SGDK CI
 
 on:
   workflow_dispatch:
@@ -18,21 +18,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate refined R2 animation assets
+      - name: Generate final R2 ambient assets
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
           python3 sgdk/tools/build_refined_animation_assets.py
 
-      - name: Verify refined R2 animation assets
+      - name: Verify final R2 ambient assets
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
-          import hashlib
+          import hashlib, json
 
           root=Path('sgdk/res')
           bg=Image.open(root/'r2_menu_bg.png'); bg.load()
@@ -40,60 +40,62 @@ jobs:
           assert bg.mode=='P' and bg.size==(320,224)
           assert sel.mode=='P' and sel.size==(144,16)
           palette=bg.getpalette()
-          assert len(palette)>=192
-          assert hashlib.sha256(bytes(palette)).hexdigest() == 'b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          assert hashlib.sha256(bytes(palette)).hexdigest()=='b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          assert hashlib.sha256((root/'r2_menu_bg.png').read_bytes()).hexdigest()=='2f1e69a776957bae113d1eb24df9564c99855459f8d661a656291775730917ff'
+          assert hashlib.sha256((root/'r2_selector.png').read_bytes()).hexdigest()=='36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd'
 
-          river=[Image.open(root/f'r2_river_{i}.png') for i in range(8)]
-          flag=[Image.open(root/f'r2_flag_right_{i}.png') for i in range(8)]
+          river=[Image.open(root/f'r2_river_{i}.png') for i in range(12)]
+          flag=[Image.open(root/f'r2_flag_right_{i}.png') for i in range(12)]
           top=[Image.open(root/f'r2_fire_top_{i}.png') for i in range(8)]
           bottom=[Image.open(root/f'r2_fire_bottom_{i}.png') for i in range(8)]
-          for im in river+flag+top+bottom: im.load(); assert im.mode=='P'
+          trees=[Image.open(root/f'r2_trees_{i}.png') for i in range(12)]
+          for im in river+flag+top+bottom+trees: im.load(); assert im.mode=='P'
           assert all(im.size==(112,224) for im in river)
           assert all(im.size==(32,40) for im in flag)
           assert all(im.size==(40,48) for im in top)
           assert all(im.size==(40,40) for im in bottom)
+          assert all(im.size==(48,48) for im in trees)
 
-          for im in river+flag+top+bottom:
-              assert max(im.getdata()) <= 15
-              assert 0 in set(im.getdata())
+          assert all(max(im.getdata())<=6 for im in river)
+          assert all(max(im.getdata())<=15 for im in flag)
+          assert all(max(im.getdata())<=12 for im in top+bottom)
+          assert all(max(im.getdata())<=15 for im in trees)
+          assert all(0 in set(im.getdata()) for im in river+flag+top+bottom+trees)
 
-          bgdata=list(bg.getdata())
-          allowed_global=set([4,5,6,7] + list(range(17,32)))
           for fi,im in enumerate(river):
               data=list(im.getdata())
               for y in range(224):
                   for x in range(112):
                       v=data[y*112+x]
                       if not v: continue
-                      assert bgdata[y*320+x] in allowed_global, ('river_on_nonwater',fi,x,y,bgdata[y*320+x])
-              for y in range(66,106):
-                  for x in range(54,82):
-                      assert data[y*112+x]==0, ('river_on_bridge',fi,x,y)
+                      assert x<80, ('river_outside_course',fi,x,y)
+              for y in range(63,109):
+                  for x in range(49,80):
+                      assert data[y*112+x]==0, ('river_on_bridge_or_bank',fi,x,y)
 
-          assert hashlib.sha256((root/'r2_menu_bg.png').read_bytes()).hexdigest() == '6c11dc420fd7d06dd4a128f4d277d088f5d11824d9517a4134ea05954e6b10ef'
-          assert hashlib.sha256((root/'r2_selector.png').read_bytes()).hexdigest() == '36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd'
+          def diff(a,b): return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
+          rd=[diff(river[i],river[(i+1)%12]) for i in range(12)]
+          fd=[diff(flag[i],flag[(i+1)%12]) for i in range(12)]
+          td=[diff(trees[i],trees[(i+1)%12]) for i in range(12)]
+          assert min(rd)>35,rd
+          assert min(fd)>4,fd
+          assert len({bytes(im.getdata()) for im in trees})>=6,td
+          assert max(td)>100,td
 
-          def diff(a,b):
-              return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
-          for name,frames,minimum in (
-              ('river',river,80), ('flag',flag,10), ('fire_top',top,20), ('fire_bottom',bottom,12)):
-              diffs=[diff(frames[i],frames[(i+1)%8]) for i in range(8)]
-              assert min(diffs)>=minimum,(name,diffs,minimum)
-              print(name,'frame diffs',diffs)
-
-          for group in (top,bottom):
-              for im in group:
-                  data=list(im.getdata())
-                  assert 15 not in data
-                  assert data.count(14) <= 18
-
-          print('R2 refined ambient asset checks PASS')
+          report=json.loads((root/'R2_REFINED_ANIM_REPORT.json').read_text(encoding='utf-8'))
+          assert report['flag_static_removed_pixels']>90
+          assert report['upper_warm_after'] < report['upper_warm_before']*0.75
+          assert report['lower_warm_after'] < report['lower_warm_before']*0.75
+          assert report['tree_static_removed_pixels']>=25
+          print('R2 final ambient checks PASS')
+          print(json.dumps(report,indent=2))
           PY
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png \
             sgdk/res/r2_river_*.png sgdk/res/r2_flag_right_*.png \
             sgdk/res/r2_fire_top_*.png sgdk/res/r2_fire_bottom_*.png \
-            > sgdk/out/R2_RESOURCE_SHA256.txt
+            sgdk/res/r2_trees_*.png > sgdk/out/R2_RESOURCE_SHA256.txt
+          cp sgdk/res/R2_REFINED_ANIM_REPORT.json sgdk/out/
 
       - name: Verify source contract and VRAM budget
         shell: bash
@@ -102,38 +104,39 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
+
           src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
           res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
           for token in (
-              'R2_ANIM_FRAMES 8','R2_RIVER_HOLD_TICKS 7','R2_FLAG_HOLD_TICKS 8',
-              'R2_FIRE_TOP_HOLD_TICKS 5','R2_FIRE_BOTTOM_HOLD_TICKS 6',
-              'draw_river_frame','draw_flag_right_frame','draw_fire_top_frame','draw_fire_bottom_frame',
-              'TILE_ATTR_FULL(PAL1','TILE_ATTR_FULL(PAL3','r2_river_7','r2_flag_right_7',
-              'r2_fire_top_7','r2_fire_bottom_7','TILE_USER_MAX_INDEX','JOY_SUPPORT_3BTN'):
-              assert token in src, token
+              'R2_RIVER_FRAMES 12','R2_FLAG_FRAMES 12','R2_FIRE_FRAMES 8','R2_TREE_FRAMES 12',
+              'R2_RIVER_HOLD_TICKS 6','R2_FLAG_HOLD_TICKS 6','R2_TREE_HOLD_TICKS 10',
+              'draw_river_frame','draw_flag_right_frame','draw_fire_top_frame','draw_fire_bottom_frame','draw_trees_frame',
+              'TILE_ATTR_FULL(PAL1','TILE_ATTR_FULL(PAL2','TILE_ATTR_FULL(PAL3',
+              'r2_river_11','r2_flag_right_11','r2_trees_11','TILE_USER_MAX_INDEX','JOY_SUPPORT_3BTN'):
+              assert token in src,token
           assert 'r2_flag_left_' not in src and 'r2_flag_left_' not in res
           assert 'apply_enhanced_menu_palette' not in src
-          for prefix in ('r2_river_','r2_flag_right_','r2_fire_top_','r2_fire_bottom_'):
-              for i in range(8): assert f'IMAGE {prefix}{i}' in res
+          for prefix,count in (('r2_river_',12),('r2_flag_right_',12),('r2_fire_top_',8),('r2_fire_bottom_',8),('r2_trees_',12)):
+              for i in range(count): assert f'IMAGE {prefix}{i}' in res,(prefix,i)
 
           root=Path('sgdk/res')
           def uniq(name):
               im=Image.open(root/name); im.load(); s=set()
               for y in range(0,im.height,8):
                   for x in range(0,im.width,8):
-                      s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
+                      s.add(bytes(im.crop((x,y,min(x+8,im.width),min(y+8,im.height))).getdata()))
               return len(s)
           bg=uniq('r2_menu_bg.png'); patch=uniq('r2_top_right_patch.png'); sel=uniq('r2_selector.png')
-          river=max(uniq(f'r2_river_{i}.png') for i in range(8))
-          flag=max(uniq(f'r2_flag_right_{i}.png') for i in range(8))
+          river=max(uniq(f'r2_river_{i}.png') for i in range(12))
+          flag=max(uniq(f'r2_flag_right_{i}.png') for i in range(12))
           top=max(uniq(f'r2_fire_top_{i}.png') for i in range(8))
           bottom=max(uniq(f'r2_fire_bottom_{i}.png') for i in range(8))
-          total=bg+patch+sel+river+flag+top+bottom
+          trees=max(uniq(f'r2_trees_{i}.png') for i in range(12))
+          total=bg+patch+sel+river+flag+top+bottom+trees
           Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-              f'background={bg}\npatch={patch}\nselector={sel}\nriver={river}\nflag={flag}\nfire_top={top}\nfire_bottom={bottom}\nconservative_total={total}\n',
-              encoding='utf-8')
+              f'background={bg}\npatch={patch}\nselector={sel}\nriver={river}\nflag={flag}\nfire_top={top}\nfire_bottom={bottom}\ntrees={trees}\nconservative_total={total}\n',encoding='utf-8')
           print('conservative unique tile slots',total)
-          assert total < 1500
+          assert total<1500,total
           PY
 
       - name: Pin SGDK 2.11
@@ -182,28 +185,28 @@ jobs:
           ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
           if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — Refined Ambient Animation Candidate
+          # Modern Tanks R2 — River Course / Flag / Fire / Trees Candidate
           - Commit: ${GITHUB_SHA}
           - SGDK: 2.11 pinned
           - ROM size: ${ROM_SIZE}
           - ROM SHA-256: ${ROM_SHA}
-          - Main menu typography/layout: unchanged
-          - Landscape color palette: unchanged
-          - River: 8-frame masked downward motion, slower and shore-confined
-          - Bridge/buildings: excluded from river animation
-          - Right flag: 8-frame muted PAL3 animation; cloth absent from static background
+          - Menu/typography/layout: unchanged
+          - Landscape palette: unchanged
+          - River: 12-frame slow flow following local river tangent; bridge and shore excluded
+          - Right flag: original cloth/emblem, 12 smooth warped frames on existing pole
           - Left flag: absent
-          - Upper fire: larger 8-frame flame, static wreck
-          - Lower fire: independent 8-frame flame, static glow removed
+          - Upper fire: static warm core removed; 8-frame irregular multi-tongue fire
+          - Lower fire: static warm core removed; 8-frame irregular multi-tongue fire
+          - Trees: subtle 12-frame one-pixel foliage motion in existing PAL2 greens
           - R1 core: preserved
           - Gate: TARGET PENDING owner emulator acceptance
           REPORT
 
-      - name: Publish refined R2 candidate
+      - name: Publish final ambient candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Refined_Ambient_Candidate
+          name: Modern_Tanks_R2_River_Flag_Fire_Trees_Candidate
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
@@ -211,6 +214,7 @@ jobs:
             sgdk/out/R2_BUILD_REPORT.md
             sgdk/out/R2_RESOURCE_SHA256.txt
             sgdk/out/R2_RESOURCE_BUDGET.md
+            sgdk/out/R2_REFINED_ANIM_REPORT.json
             sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
             sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
           if-no-files-found: warn
