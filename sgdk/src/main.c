@@ -2,9 +2,11 @@
 #include "resources.h"
 
 /*
- * Modern Tanks R2 — Main Menu Visual Target / Focused Menu Rework
+ * Modern Tanks R2 — Main Menu Visual Target / Reference-Faithful Rework
  * Clean SGDK rebuild only. R1 core is accepted and preserved.
- * No old DEV code. No Granada assets/code. Reference PNGs are not embedded.
+ * No old DEV code. No Granada assets/code.
+ * Runtime art is derived from the project's locked visual references without
+ * modifying those source PNGs; it is stored as deterministic game assets.
  */
 
 typedef enum
@@ -39,6 +41,7 @@ typedef struct
 #define R2_SELECTOR_X 14
 #define R2_SELECTOR_W 13
 #define R2_SELECTOR_H 2
+#define R2_SELECTOR_CRAM_INDEX 33
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -58,7 +61,8 @@ static u16 selectorTileBase = 0;
 static u16 selectorPulse = 0;
 static bool menuArtLoaded = FALSE;
 
-static const u16 selectorY[R2_MENU_COUNT] = {10, 12, 14, 16};
+/* Rows are aligned to the native 8x8 tile grid in the reference-faithful art. */
+static const u16 selectorY[R2_MENU_COUNT] = {12, 14, 16, 18};
 static const Image *selectorImages[R2_MENU_COUNT] =
 {
     &r2_sel_0,
@@ -66,32 +70,6 @@ static const Image *selectorImages[R2_MENU_COUNT] =
     &r2_sel_2,
     &r2_sel_3
 };
-
-static const char *state_name(GameState state)
-{
-    switch (state)
-    {
-        case STATE_BOOT: return "BOOT";
-        case STATE_TITLE: return "TITLE";
-        case STATE_MAIN_MENU: return "MAIN_MENU";
-        case STATE_TEST_BATTLE: return "TEST_BATTLE";
-        case STATE_GARAGE: return "GARAGE";
-        default: return "INVALID";
-    }
-}
-
-static const char *bank_name(ResourceBank bank)
-{
-    switch (bank)
-    {
-        case BANK_NONE: return "NONE";
-        case BANK_CORE: return "CORE";
-        case BANK_MENU: return "MENU";
-        case BANK_BATTLE_SHELL: return "BATTLE";
-        case BANK_GARAGE_SHELL: return "GARAGE";
-        default: return "INVALID";
-    }
-}
 
 static ResourceBank state_bank(GameState state)
 {
@@ -182,8 +160,10 @@ static u16 max_selector_tiles(void)
 {
     u16 i;
     u16 m = 0;
+
     for (i = 0; i < R2_MENU_COUNT; i++)
         if (selectorImages[i]->tileset->numTile > m) m = selectorImages[i]->tileset->numTile;
+
     return m;
 }
 
@@ -219,6 +199,8 @@ static void draw_menu_art(void)
     bgTiles = r2_menu_bg.tileset->numTile;
     selectorTileBase = TILE_USER_INDEX + bgTiles;
 
+    /* All four selector images share the same reference-faithful frame. */
+    (void) max_selector_tiles();
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -229,14 +211,14 @@ static void update_menu_visuals(void)
 {
     if (!menuArtLoaded) return;
 
-    /* Only the active menu row pulses. The decorative moving tank was removed. */
+    /* Only the active-row frame pulses; there is no detached decorative tank. */
     selectorPulse++;
     if ((selectorPulse & 15) == 0)
     {
         if (selectorPulse & 16)
-            PAL_setColor(45, RGB24_TO_VDPCOLOR(0xFBE049));
+            PAL_setColor(R2_SELECTOR_CRAM_INDEX, RGB24_TO_VDPCOLOR(0xFBE049));
         else
-            PAL_setColor(45, RGB24_TO_VDPCOLOR(0xC9A72F));
+            PAL_setColor(R2_SELECTOR_CRAM_INDEX, RGB24_TO_VDPCOLOR(0xC9A72F));
     }
 }
 
@@ -244,7 +226,7 @@ static void draw_boot(void)
 {
     VDP_setTextPalette(PAL0);
     VDP_drawText("MODERN TANKS", 14, 5);
-    VDP_drawText("R2 MAIN MENU VISUAL TARGET", 6, 9);
+    VDP_drawText("R2 REFERENCE-FAITHFUL", 8, 9);
     VDP_drawText("R1 CORE ACCEPTED", 11, 13);
     VDP_drawText("LOADING MENU BANK...", 10, 17);
 }
@@ -287,6 +269,7 @@ static void draw_state(GameState state)
 static void state_enter(GameState state)
 {
     ResourceBank expected = state_bank(state);
+
     stateTicks = 0;
     resource_bank_load(expected);
     if (activeBank != expected) set_error("BANK_STATE_MISMATCH");
@@ -353,17 +336,19 @@ static void handle_input_frame(void)
                 menuIndex = (menuIndex == 0) ? (R2_MENU_COUNT - 1) : (menuIndex - 1);
                 draw_selector(menuIndex, old, FALSE);
             }
+
             if (input.pressed & BUTTON_DOWN)
             {
                 u16 old = menuIndex;
                 menuIndex = (menuIndex + 1) % R2_MENU_COUNT;
                 draw_selector(menuIndex, old, FALSE);
             }
+
             if (input.pressed & (BUTTON_A | BUTTON_START))
             {
                 if (menuIndex == 0) change_state(STATE_TEST_BATTLE);
                 else if (menuIndex == 1) change_state(STATE_GARAGE);
-                /* STATISTICS and OPTIONS intentionally remain visual-only until R9. */
+                /* STATISTICS and OPTIONS remain visual-only until their planned stages. */
             }
             break;
 
