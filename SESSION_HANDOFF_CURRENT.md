@@ -18,15 +18,17 @@
 
 ## 3. Текущий milestone — R2 MAIN MENU VISUAL TARGET
 
-Статус: **MAX DETAIL BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
+Статус: **TANK REFERENCE FIX — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
 
 R3 не начат и остаётся запрещён до прямого принятия R2 владельцем.
 
-### История отклонений
+### История R2
 
-Первый R2 candidate и Visual Rework 1 технически собирались и работали, но владелец проекта отклонил их визуально как слишком упрощённые относительно locked `references/MAIN_MENU_REFERENCE.png`.
+- Первый R2 candidate был визуально отклонён как слишком упрощённый относительно `references/MAIN_MENU_REFERENCE.png`.
+- Visual Rework / MAX DETAIL повысил общую плотность меню, но владелец указал на критический дефект: танки оставались условными пиктограммами и не соответствовали `references/TANKS_DETAILED_REFERENCE.png`.
+- Эти варианты больше не считать финальными acceptance candidate.
 
-Не возвращаться к ним. Текущий candidate — **R2 MAX DETAIL**.
+Текущий candidate — **R2 TANK REFERENCE FIX**.
 
 ## 4. Целевая платформа
 
@@ -34,68 +36,62 @@ Modern Tanks остаётся настоящим Mega Drive/Genesis ROM.
 
 - SG800 рассматривается как MD/Mega Drive emulator host для пользовательских ROM;
 - HDMI/4K — вывод/upscaling, а не внутреннее разрешение игры;
-- основной render target остаётся H40 320×224 Mega Drive;
+- основной render target — H40 320×224 Mega Drive;
 - тот же `.bin` должен работать на SG800 и в MD/Genesis эмуляторах ПК;
-- обязательный control path — 3-button D-Pad + A/B/C/START; 6-button pads совместимы, X/Y/Z не требуются базовой игре.
+- обязательный control path — 3-button D-Pad + A/B/C/START.
 
-## 5. R2 MAX DETAIL art direction
+## 5. Официальный tank art direction
 
-Вместо малого процедурного улучшения сделан полный художественный rework с существенно более плотным использованием Mega Drive pattern budget:
+Перед последним исправлением непосредственно перечитан locked `references/TANKS_DETAILED_REFERENCE.png`.
 
-- native 320×224 indexed pixel art;
-- собственный hand-defined pixel font вместо TTF/downscale;
-- крупный layered metallic `MODERN TANKS` logo с steel wings/rivets/bevels;
-- organic battlefield вместо заметной 8×8 сетки;
-- winding river + shoreline;
-- grass/dirt variation, roads;
-- bridges;
-- brick/steel fortifications;
-- clustered trees;
-- craters/rubble;
-- multiple distinct top-down tanks;
-- shells, muzzle flashes, explosions, smoke;
-- steel central menu;
-- canonical `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
-- detailed T-1…T-4 cards;
-- segmented stats bars;
-- detailed minimap;
-- selector pulse/navigation;
-- moving tank overlay;
-- accepted R1 bank unload/reload + CRAM/sprite cleanup сохранены.
+Обязательные признаки:
 
-`ПРОКАЧКА` остаётся внутри ГАРАЖА, выбор миссий — внутри ИГРАТЬ согласно frozen design.
+- вид сверху;
+- отдельные гусеницы;
+- сформированный бронекорпус;
+- башня/погон;
+- маска орудия + полноценный ствол;
+- люки/болты/двигательный отсек/боковые модули в доступном разрешении;
+- каждый класс отличается силуэтом и массой;
+- T-1 зелёный узкий разведчик;
+- T-2 синий универсальный;
+- T-3 широкий тяжёлый «крепость»;
+- T-4 красный угловатый штурмовик.
 
-Locked reference PNG не встроен, не изменён и не downscale'ится. Granada assets/code отсутствуют.
+Эти признаки теперь перенесены в:
 
-## 6. R2 MAX DETAIL CI — PASS
+- четыре карточки T-1…T-4 нижнего HUD;
+- battlefield tanks на фоне меню;
+- moving 16×16 tank overlay.
 
-- source commit: `53ef4dba355abbad5ad052ef1ee35345e17006bf`;
-- GitHub Actions run: `34184514661`;
+Reference PNG не изменялся, не перекодировался и не встраивался как готовая текстура. Графика перерисована вручную в Mega Drive-oriented pixel-art коде.
+
+## 6. Текущий R2 CI — PASS
+
+- source/build commit: `acba3abbf58fd3d1666617d51431c2b5f31eab43`;
+- GitHub Actions run: `34185523022`;
 - job `build-r2`: SUCCESS;
 - generated-art validation: PASS;
-- generated resource SHA checks: PASS;
 - source/locked-art contract: PASS;
 - SGDK 2.11 build A: PASS;
 - SGDK 2.11 build B: PASS;
 - byte-for-byte reproducibility: PASS;
 - independent ROM audit: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `52b0395fb023ebdaa08ca7e03152fa6b2040ed5c9a6b997509c618c4a9e95eba`;
-- header checksum: `0xE671`;
-- full-ROM XOR-fold: `0x0000`;
-- exact `r2_menu_bg.png` SHA-256: `927534f927eaf17cd939a4977f20adbd8a705ca405f4c1a37511bd2a593376d0`.
+- ROM SHA-256: `5b73a0e9a1d7c8efb28541631cf09580790c0496d7b60634db41543b3ad586d9`;
+- header checksum: `0x647E`;
+- required checksum: `0x647E`;
+- full-ROM XOR-fold: `0x0000`.
 
-Conservative project-pattern estimate: about **883 tiles / 28,256 bytes**, leaving about **16,800 bytes** against the 44 KiB project-pattern ceiling. Это сознательно заметно плотнее ранних R2 builds.
-
-Полный статус: `tests/r2/R2_MAX_DETAIL_BUILD_STATUS.md`.
+Подробности: `tests/r2/R2_TANK_REFERENCE_FIX.md` и `tests/r2/R2_BUILD_STATUS.md`.
 
 ## 7. Следующий обязательный шаг
 
-Только target-проверка **R2 MAX DETAIL ROM**:
+Только target-проверка текущего **R2 TANK REFERENCE FIX ROM**:
 
-- визуальное сравнение с locked main-menu reference;
-- selector Up/Down + pulse;
-- moving battlefield tank;
+- сравнить меню с `references/MAIN_MENU_REFERENCE.png`;
+- отдельно сравнить T-1…T-4 и фоновые танки с `references/TANKS_DETAILED_REFERENCE.png`;
+- проверить selector Up/Down;
 - ИГРАТЬ → TEST_BATTLE → B → MENU;
 - ГАРАЖ → GARAGE → B → MENU;
 - после переходов `ERR:00`;
