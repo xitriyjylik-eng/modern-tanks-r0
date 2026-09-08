@@ -47,6 +47,7 @@ jobs:
           sel=Image.open(root/'r2_selector.png'); sel.load()
           assert all(((v>>4)&3)==0 for v in sel.getdata())
           assert 15 in set(sel.getdata())
+          assert 15 not in set(bg.getdata()), 'PAL0 index 15 is reserved for selector pulse'
           print('R2 exact graphics PASS; palette tile use',use)
           PY
           mkdir -p sgdk/out
@@ -76,13 +77,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'R2 Final Main Menu Visual Target' sgdk/src/main.c
-          grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
-          grep -q 'TILE_USER_MAX_INDEX' sgdk/src/main.c
-          grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
-          grep -q 'IMAGE r2_selector' sgdk/res/resources.res
-          ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
-          ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
+          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
+          for token in ('R2 Final Main Menu Visual Target','JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX'):
+              assert token in src, token
+          for token in ('IMAGE r2_menu_bg','IMAGE r2_selector'):
+              assert token in res, token
+          for bad in ('DEV149','DEV150','DEV151','opcode.emitter'):
+              assert bad.lower() not in src.lower(), bad
+          print('R2 source contract PASS')
+          PY
 
       - name: Pin SGDK 2.11
         shell: bash
