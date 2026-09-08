@@ -1,86 +1,59 @@
-# MODERN TANKS — CURRENT SESSION HANDOFF
+# SESSION HANDOFF — CURRENT
 
-Дата состояния: **2026-09-08**.
+Дата: 2026-09-09
 
-## 1. Инварианты
+## Главное
 
-- Идею Modern Tanks не менять.
-- R0 и R1 не откатывать.
-- Granada — только технический образец Mega Drive; её графика/код в Modern Tanks не встраиваются.
-- Старая DEV-линия запрещена.
-- Clean SGDK 2.11 rebuild only.
-- Нативная цель Mega Drive: `320x224`, стандартный 3-button controller.
+R0, R1 и R2 завершены и приняты владельцем. Следующая рабочая точка — R3 Battle Renderer / HUD. Никакой повторной художественной переработки R2 не требуется.
 
-## 2. Актуальный визуальный источник истины
+Принятый игровой baseline: `a1faa7d567ceb7f5506005b354da28f5c1ea0cee`.
+Финальный подтверждённый ROM: SHA-256 `fb6896471a1bf559e13c55118c3d2beedf8c1567ff6703a114ef05857b744017`, 131072 bytes, audit PASS.
+Финальный проверочный CI: run `34255626880`, SUCCESS.
 
-Владелец заменил старую визуальную цель двумя новыми утверждёнными образцами из текущей сессии:
+## Что уже закрыто
 
-1. **Gameplay visual reference** — top-down поле боя с рекой, мостом, лесом, зданиями, укреплениями, дорогами, кратерами, огнём/дымом и насыщенной 16-bit детализацией.
-2. **Tank mini-sprite reference** — T-1/T-2/T-3/T-4, вид сверху, 16x16 в игре, 8 направлений, один основной ствол, отчётливые корпус/башня/гусеницы и разные силуэты классов.
+### R0 — ACCEPTED / CLOSED
 
-Старые упрощённые карта/танки больше не являются visual target. Файлы legacy references можно хранить как историю проекта, но новые реализации не должны ориентироваться на их старую упрощённую интерпретацию.
+Аппаратно-базовый SGDK runtime, нативный 320×224, базовый input и фактическая проверка на целевом Android Mega Drive эмуляторе.
 
-Подробные параметры зафиксированы в `plan/VISUAL_STYLE_TARGET.md`.
+### R1 — ACCEPTED / CLOSED
 
-## 3. Закрытые этапы
+Стабильная state machine и resource-bank основа: BOOT → TITLE → MAIN_MENU; MAIN_MENU → TEST_BATTLE/GARAGE; возврат B; 3-button input; NTSC/PAL timing; enter/leave; очистка planes/sprites/palettes; error tracking.
 
-- **R0 — ACCEPTED / CLOSED.**
-- **R1 — ACCEPTED / CLOSED.** FIX2 target: `ERR:00`, `SOAK: PASS 100/100`.
+### R2 — ACCEPTED / CLOSED
 
-## 4. R2 — FINAL VISUAL CANDIDATE / CI PASS / TARGET PENDING
+Главное меню визуально принято. Зафиксированы шрифт, центральная композиция, рамки, селектор, фон, цветовой баланс и отсутствие правой мини-карты.
 
-R2 остаётся главным меню. R3 не начинать до прямого принятия R2 владельцем.
+Ambient final:
+- river 12 frames, течение по форме русла;
+- bridge/shore/buildings исключены из water overlay;
+- right flag 12 frames, плавное полотно на существующем pole;
+- left flag absent;
+- upper fire 8 frames, static flame duplicate removed;
+- lower fire 8 frames, independent phase, static duplicate removed;
+- trees 12 frames, very subtle foliage motion;
+- существующие PAL0/PAL1/PAL2/PAL3 категории используются без отдельной чрезмерно яркой палитры;
+- все группы анимации обновляются независимыми таймерами.
 
-Обязательная компоновка R2:
+## Что нельзя сломать
 
-- логотип `MODERN TANKS`;
-- полноценный battlefield background в новом утверждённом стиле;
-- центральная steel/navy menu panel;
-- четыре пункта `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
-- selector/navigation;
-- **нет** нижнего HUD `T-1..T-4 / параметры / карта`;
-- **нет** отдельного декоративного движущегося танка.
+- Не менять идею игры и frozen design.
+- Не менять принятый R2 без прямой новой задачи владельца.
+- Не трогать locked references в `references/`.
+- Не возвращать правую мини-карту или левый флаг.
+- Не возвращать Base64/Base85 reconstruction pipeline как обязательный путь ресурсов.
+- Не использовать Granada как donor ROM/source assets.
+- Не ломать R1 transitions/resource-bank cleanup.
 
-Выбор/характеристики танка относятся к `ГАРАЖ`; карта/миссионные данные — к игровым/миссионным экранам.
+## Следующий шаг
 
-## 5. Графическая реализация текущего R2
+Открыть `plan/NEXT_R3_SCOPE.md` и реализовывать R3 по gate-driven схеме. R3 должен превратить TEST_BATTLE shell в настоящий battle renderer/HUD foundation, но ещё не обязан реализовывать всю игровую механику R6.
 
-Текущий candidate больше не использует прежний процедурный клетчатый art-layer.
+## Приоритет источников
 
-- Background — exact deterministic indexed asset `320x224`, подготовленный из утверждённого battlefield visual language.
-- Используется 8bpp indexed PNG с выбором PAL0..PAL3 на каждом 8x8 tile.
-- SHA background asset: `5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea`.
-- Selector asset: `144x16`, SHA `36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd`.
-- Palette-tile distribution: `PAL0=576`, `PAL1=56`, `PAL2=150`, `PAL3=338`.
-- Unique indexed tiles before ResComp optimization: background `921`, selector `6`.
-- Искусственный старый project ceiling удалён; остаются только реальные ограничения VDP/SGDK, runtime проверяет `TILE_USER_MAX_INDEX`.
-- Background не использует PAL0 index 15; он зарезервирован selector pulse.
-
-## 6. Финальный CI candidate
-
-- tested commit: `d087d03275c658e4799afa53e395251083308669`;
-- GitHub Actions run: `34201271457` — **SUCCESS**;
-- SGDK 2.11 build A/B: **PASS, byte-identical**;
-- independent ROM audit: **PASS**;
-- ROM size: `131072` bytes;
-- ROM SHA-256: `e0b3a90b3a33c8e06bde7ec9749ef7f105ff38558ed3d6eb6b1c0dda5909773c`;
-- header checksum: `0x49B6`;
-- required checksum: `0x49B6`;
-- XOR-fold: `0x0000`;
-- console header: `SEGA MEGA DRIVE`.
-
-Artifact: `Modern_Tanks_R2_Final_Visual_Candidate`.
-
-## 7. Что проверить владельцу в MD Emu Games Gen
-
-- общий вид меню соответствует новой утверждённой 16-bit battlefield стилистике;
-- река/мост/лес/постройки/земля/следы боя выглядят как единый мир с будущим gameplay;
-- логотип и steel/navy panel читаются хорошо;
-- Up/Down selector работает;
-- `ИГРАТЬ → TEST_BATTLE → B → MENU`;
-- `ГАРАЖ → GARAGE → B → MENU`;
-- нижнего HUD нет;
-- декоративного ездящего танка нет;
-- нет corruption/ERR после нескольких переходов.
-
-**R2 пока НЕ ACCEPTED. R3 BLOCKED до прямого target PASS владельца.**
+1. `00_CURRENT_STATUS_READ_FIRST.md` — текущие статусы.
+2. `plan/PROJECT_PROGRESS_ACCEPTED_R2.md` — принятый прогресс и что осталось.
+3. `design/GAME_DESIGN_FROZEN.md` — замороженные правила/идея игры.
+4. `plan/REBUILD_MASTER_PLAN.md` — общий roadmap.
+5. `plan/NEXT_R3_SCOPE.md` — непосредственная задача.
+6. `references/*` — locked visual references.
