@@ -18,6 +18,7 @@ def decode_text_payload(parts, out_name):
 # Background is split only to keep GitHub connector text writes lossless.
 decode_text_payload([
     "r2_menu_bg.png.b64.00",
+    "r2_menu_bg.png.b64.00b",
     "r2_menu_bg.png.b64.01",
     "r2_menu_bg.png.b64.02",
     "r2_menu_bg.png.b64.03",
