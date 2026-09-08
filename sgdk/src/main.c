@@ -10,7 +10,7 @@
  * - accepted Russian menu typography retained
  * - top-right minimap removed from the menu background
  * - detailed battlefield background with original accepted color balance
- * - two wind-driven flags
+ * - decorative flag overlays removed; only the accepted static background remains
  * - river ambience animated in a downward-flow cycle
  * - burning wreck fire animation
  * - no detached decorative tank and no lower stat/minimap strip
@@ -47,7 +47,6 @@ typedef struct
 #define R2_MENU_COUNT 4
 #define R2_ANIM_FRAMES 4
 #define R2_RIVER_HOLD_TICKS 5
-#define R2_FLAG_HOLD_TICKS 9
 #define R2_FIRE_HOLD_TICKS 4
 
 #define R2_SELECTOR_X 11
@@ -58,10 +57,6 @@ typedef struct
 /* Overlay positions are tile aligned to the native 320x224 composition. */
 #define R2_RIVER_X 0
 #define R2_RIVER_Y 0
-#define R2_FLAG_LEFT_X 2
-#define R2_FLAG_LEFT_Y 4
-#define R2_FLAG_RIGHT_X 36
-#define R2_FLAG_RIGHT_Y 14
 #define R2_FIRE_X 31
 #define R2_FIRE_Y 6
 
@@ -82,15 +77,11 @@ static const char *lastError = "NONE";
 static u16 patchTileBase = 0;
 static u16 selectorTileBase = 0;
 static u16 riverTileBase = 0;
-static u16 flagLeftTileBase = 0;
-static u16 flagRightTileBase = 0;
 static u16 fireTileBase = 0;
 static u16 selectorPulse = 0;
 static u16 riverAnimTick = 0;
-static u16 flagAnimTick = 0;
 static u16 fireAnimTick = 0;
 static u16 riverAnimFrame = 0;
-static u16 flagAnimFrame = 0;
 static u16 fireAnimFrame = 0;
 static bool menuArtLoaded = FALSE;
 
@@ -100,16 +91,6 @@ static const u16 selectorY[R2_MENU_COUNT] = {11, 13, 15, 17};
 static const Image * const riverFrames[R2_ANIM_FRAMES] =
 {
     &r2_river_0, &r2_river_1, &r2_river_2, &r2_river_3
-};
-
-static const Image * const flagLeftFrames[R2_ANIM_FRAMES] =
-{
-    &r2_flag_left_0, &r2_flag_left_1, &r2_flag_left_2, &r2_flag_left_3
-};
-
-static const Image * const flagRightFrames[R2_ANIM_FRAMES] =
-{
-    &r2_flag_right_0, &r2_flag_right_1, &r2_flag_right_2, &r2_flag_right_3
 };
 
 static const Image * const fireFrames[R2_ANIM_FRAMES] =
@@ -165,6 +146,7 @@ static u16 max4(u16 a, u16 b, u16 c, u16 d)
     if (d > m) m = d;
     return m;
 }
+
 
 static void resource_bank_unload(void)
 {
@@ -239,25 +221,6 @@ static void draw_river_frame(u16 frame)
                     TRUE);
 }
 
-static void draw_flag_frames(u16 frame)
-{
-    VDP_drawImageEx(BG_A,
-                    flagLeftFrames[frame],
-                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, flagLeftTileBase),
-                    R2_FLAG_LEFT_X,
-                    R2_FLAG_LEFT_Y,
-                    FALSE,
-                    TRUE);
-
-    VDP_drawImageEx(BG_A,
-                    flagRightFrames[frame],
-                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, flagRightTileBase),
-                    R2_FLAG_RIGHT_X,
-                    R2_FLAG_RIGHT_Y,
-                    FALSE,
-                    TRUE);
-}
-
 static void draw_fire_frame(u16 frame)
 {
     VDP_drawImageEx(BG_A,
@@ -275,14 +238,16 @@ static void draw_menu_art(void)
     u16 patchTiles;
     u16 selectorTiles;
     u16 riverTiles;
-    u16 flagLeftTiles;
-    u16 flagRightTiles;
     u16 fireTiles;
     u16 nextTile;
 
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 
+    /*
+     * 8bpp indexed source: upper two index bits choose PAL0..PAL3 per 8x8 tile.
+     * This keeps the maximum-detail 64-color menu art within normal Mega Drive rules.
+     */
     VDP_drawImageEx(BG_B,
                     &r2_menu_bg,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, TILE_USER_INDEX),
@@ -295,6 +260,7 @@ static void draw_menu_art(void)
     patchTiles = r2_top_right_patch.tileset->numTile;
     patchTileBase = TILE_USER_INDEX + bgTiles;
 
+    /* Replace the old top-right minimap directly with battlefield terrain. */
     VDP_drawImageEx(BG_B,
                     &r2_top_right_patch,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, patchTileBase),
@@ -308,14 +274,6 @@ static void draw_menu_art(void)
                       r2_river_1.tileset->numTile,
                       r2_river_2.tileset->numTile,
                       r2_river_3.tileset->numTile);
-    flagLeftTiles = max4(r2_flag_left_0.tileset->numTile,
-                         r2_flag_left_1.tileset->numTile,
-                         r2_flag_left_2.tileset->numTile,
-                         r2_flag_left_3.tileset->numTile);
-    flagRightTiles = max4(r2_flag_right_0.tileset->numTile,
-                          r2_flag_right_1.tileset->numTile,
-                          r2_flag_right_2.tileset->numTile,
-                          r2_flag_right_3.tileset->numTile);
     fireTiles = max4(r2_fire_0.tileset->numTile,
                      r2_fire_1.tileset->numTile,
                      r2_fire_2.tileset->numTile,
@@ -325,10 +283,6 @@ static void draw_menu_art(void)
     nextTile = selectorTileBase + selectorTiles;
     riverTileBase = nextTile;
     nextTile += riverTiles;
-    flagLeftTileBase = nextTile;
-    nextTile += flagLeftTiles;
-    flagRightTileBase = nextTile;
-    nextTile += flagRightTiles;
     fireTileBase = nextTile;
     nextTile += fireTiles;
 
@@ -340,14 +294,14 @@ static void draw_menu_art(void)
     }
 
     riverAnimTick = 0;
-    flagAnimTick = 0;
     fireAnimTick = 0;
     riverAnimFrame = 0;
-    flagAnimFrame = 0;
     fireAnimFrame = 0;
     draw_river_frame(riverAnimFrame);
-    draw_flag_frames(flagAnimFrame);
     draw_fire_frame(fireAnimFrame);
+
+    /* River image spans 14 tile columns and can rewrite transparent BG_A cells,
+       therefore selector is always redrawn after each ambient frame. */
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -374,14 +328,6 @@ static void update_menu_visuals(void)
         riverAnimFrame = (riverAnimFrame + 1) % R2_ANIM_FRAMES;
         draw_river_frame(riverAnimFrame);
         draw_selector(menuIndex, menuIndex, TRUE);
-    }
-
-    flagAnimTick++;
-    if (flagAnimTick >= R2_FLAG_HOLD_TICKS)
-    {
-        flagAnimTick = 0;
-        flagAnimFrame = (flagAnimFrame + 1) % R2_ANIM_FRAMES;
-        draw_flag_frames(flagAnimFrame);
     }
 
     fireAnimTick++;
@@ -521,6 +467,7 @@ static void handle_input_frame(void)
             {
                 if (menuIndex == 0) change_state(STATE_TEST_BATTLE);
                 else if (menuIndex == 1) change_state(STATE_GARAGE);
+                /* Statistics and options remain visual-only until their planned stages. */
             }
             break;
 

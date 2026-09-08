@@ -5,14 +5,6 @@ IMAGE r2_river_0 "r2_river_0.png" FAST ALL
 IMAGE r2_river_1 "r2_river_1.png" FAST ALL
 IMAGE r2_river_2 "r2_river_2.png" FAST ALL
 IMAGE r2_river_3 "r2_river_3.png" FAST ALL
-IMAGE r2_flag_left_0 "r2_flag_left_0.png" FAST ALL
-IMAGE r2_flag_left_1 "r2_flag_left_1.png" FAST ALL
-IMAGE r2_flag_left_2 "r2_flag_left_2.png" FAST ALL
-IMAGE r2_flag_left_3 "r2_flag_left_3.png" FAST ALL
-IMAGE r2_flag_right_0 "r2_flag_right_0.png" FAST ALL
-IMAGE r2_flag_right_1 "r2_flag_right_1.png" FAST ALL
-IMAGE r2_flag_right_2 "r2_flag_right_2.png" FAST ALL
-IMAGE r2_flag_right_3 "r2_flag_right_3.png" FAST ALL
 IMAGE r2_fire_0 "r2_fire_0.png" FAST ALL
 IMAGE r2_fire_1 "r2_fire_1.png" FAST ALL
 IMAGE r2_fire_2 "r2_fire_2.png" FAST ALL

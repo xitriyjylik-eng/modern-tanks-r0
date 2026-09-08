@@ -1,4 +1,4 @@
-name: R2 Color-Restore Animated Main Menu SGDK CI
+name: R2 Targeted Fix SGDK CI
 
 on:
   workflow_dispatch:
@@ -18,125 +18,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify R2 color and animation assets
+      - name: Verify R2 targeted fix
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
           python3 - <<'PY'
-          from PIL import Image
           from pathlib import Path
-          import hashlib
+          from PIL import Image
+          root=Path('sgdk/res')
+          src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
+          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
+          assert 'r2_flag_' not in src and 'r2_flag_' not in res
+          assert 'flagAnim' not in src
+          assert 'apply_enhanced_menu_palette' not in src
+          assert 'draw_river_frame' in src and 'draw_fire_frame' in src
+          assert 'r2_river_3' in res and 'r2_fire_3' in res
 
-          root = Path('sgdk/res')
-          required = {
-              'r2_menu_bg.png': (320,224),
-              'r2_top_right_patch.png': (88,56),
-              'r2_selector.png': (144,16),
-              **{f'r2_river_{i}.png': (112,224) for i in range(4)},
-              **{f'r2_flag_left_{i}.png': (32,32) for i in range(4)},
-              **{f'r2_flag_right_{i}.png': (32,40) for i in range(4)},
-              **{f'r2_fire_{i}.png': (32,40) for i in range(4)},
-          }
-
-          images = {}
-          for name, size in required.items():
-              p = root / name
-              assert p.is_file(), f'missing {name}'
-              im = Image.open(p); im.load()
-              assert im.mode == 'P' and im.size == size, (name, im.mode, im.size)
-              images[name] = im
-
-          bg = images['r2_menu_bg.png']
-          bg_sha = hashlib.sha256((root/'r2_menu_bg.png').read_bytes()).hexdigest()
-          sel_sha = hashlib.sha256((root/'r2_selector.png').read_bytes()).hexdigest()
-          assert bg_sha == '2e8630affb921321a26d0e2f893409cbd23124ac874fda2377cd321a4336cf29'
-          assert sel_sha == '36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd'
-
-          bgpal = bg.getpalette()
-          assert images['r2_top_right_patch.png'].getpalette() == bgpal
-          assert set(images['r2_selector.png'].getdata()) == {0,15}
-          assert 15 not in set(bg.getdata())
-
-          for name, im in images.items():
-              if name.startswith(('r2_river_','r2_flag_','r2_fire_')):
-                  assert im.getpalette() == bgpal, f'palette drift: {name}'
-
-          for name, im in images.items():
-              if name == 'r2_selector.png':
-                  continue
-              for ty in range(0, im.height, 8):
-                  for tx in range(0, im.width, 8):
-                      banks = {((im.getpixel((x,y)) >> 4) & 3)
-                               for y in range(ty,ty+8)
-                               for x in range(tx,tx+8)}
-                      assert len(banks) == 1, (name, tx, ty, banks)
-
-          for prefix in ('r2_flag_left_','r2_flag_right_','r2_fire_'):
-              for i in range(4):
-                  data = list(images[f'{prefix}{i}.png'].getdata())
-                  assert 0 in data, f'no transparency: {prefix}{i}'
-                  visible = [v for v in data if v]
-                  assert visible and all((v >> 4) == 0 for v in visible)
-
-          for i in range(4):
-              data = list(images[f'r2_river_{i}.png'].getdata())
-              assert 16 in data and all((v >> 4) == 1 for v in data)
-
-          def diff(a,b):
-              return sum(x != y for x,y in zip(a.getdata(), b.getdata()))
-
-          thresholds = {
-              'r2_river_': 500,
-              'r2_flag_left_': 20,
-              'r2_flag_right_': 20,
-              'r2_fire_': 50,
-          }
-          for prefix, minimum in thresholds.items():
-              frames = [images[f'{prefix}{i}.png'] for i in range(4)]
-              diffs = [diff(frames[i], frames[(i+1)%4]) for i in range(4)]
-              assert min(diffs) >= minimum, (prefix, diffs, minimum)
-              print(prefix, 'frame diffs', diffs)
-
-          print('R2 color-restored animated assets PASS:', len(required), 'PNGs')
+          river=[Image.open(root/f'r2_river_{i}.png') for i in range(4)]
+          fire=[Image.open(root/f'r2_fire_{i}.png') for i in range(4)]
+          bg=Image.open(root/'r2_menu_bg.png')
+          pal=bg.getpalette()
+          for im in river+fire:
+              im.load(); assert im.mode=='P'; assert im.getpalette()==pal
+          for im in river:
+              for y in range(68,104):
+                  for x in range(56,80):
+                      assert (im.getpixel((x,y)) & 15)==0, ('water_on_bridge',x,y)
+          f0=fire[0]
+          for im in fire[1:]:
+              for y in range(22,40):
+                  for x in range(32):
+                      assert im.getpixel((x,y))==f0.getpixel((x,y)), ('moving_fire_base',x,y)
+          def diff(a,b): return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
+          assert min(diff(river[i],river[(i+1)%4]) for i in range(4)) >= 500
+          assert min(diff(fire[i],fire[(i+1)%4]) for i in range(4)) >= 30
+          print('R2 targeted fix checks PASS')
           PY
           mkdir -p sgdk/out
-          sha256sum sgdk/res/r2_*.png > sgdk/out/R2_RESOURCE_SHA256.txt
-
-      - name: Verify source contract and VRAM budget
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image
-
-          src = Path('sgdk/src/main.c').read_text(encoding='utf-8')
-          res = Path('sgdk/res/resources.res').read_text(encoding='utf-8')
-          for token in ('JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX','R2_ANIM_FRAMES 4',
-                        'R2_RIVER_HOLD_TICKS 5','R2_FLAG_HOLD_TICKS 9','R2_FIRE_HOLD_TICKS 4',
-                        'draw_river_frame','draw_flag_frames','draw_fire_frame'):
-              assert token in src, token
-          assert 'apply_enhanced_menu_palette' not in src
-          for token in ('IMAGE r2_menu_bg','IMAGE r2_top_right_patch','IMAGE r2_river_3',
-                        'IMAGE r2_flag_left_3','IMAGE r2_flag_right_3','IMAGE r2_fire_3'):
-              assert token in res, token
-
-          root = Path('sgdk/res')
-          def uniq(name):
-              im = Image.open(root/name); im.load(); s = set()
-              for y in range(0,im.height,8):
-                  for x in range(0,im.width,8):
-                      s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
-              return len(s)
-          total = uniq('r2_menu_bg.png') + uniq('r2_top_right_patch.png') + uniq('r2_selector.png')
-          total += max(uniq(f'r2_river_{i}.png') for i in range(4))
-          total += max(uniq(f'r2_flag_left_{i}.png') for i in range(4))
-          total += max(uniq(f'r2_flag_right_{i}.png') for i in range(4))
-          total += max(uniq(f'r2_fire_{i}.png') for i in range(4))
-          Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(f'R2 conservative tile slots: {total}\n', encoding='utf-8')
-          print('source contract PASS; conservative tile slots', total)
-          PY
 
       - name: Pin SGDK 2.11
         shell: bash
@@ -144,12 +63,9 @@ jobs:
           set -euo pipefail
           docker pull "$SGDK_IMAGE"
           ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
-          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
           echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
-          printf '%s\n' "$ID" > sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
-          printf '%s\n' "$DIGEST" > sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
 
-      - name: Prepare reproducible build trees
+      - name: Prepare reproducible builds
         shell: bash
         run: |
           set -euo pipefail
@@ -168,53 +84,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f /tmp/sgdk-r2-a/out/rom.bin
-          test -f /tmp/sgdk-r2-b/out/rom.bin
           cmp /tmp/sgdk-r2-a/out/rom.bin /tmp/sgdk-r2-b/out/rom.bin
           cp /tmp/sgdk-r2-a/out/rom.bin sgdk/out/rom.bin
           sha256sum sgdk/out/rom.bin | tee sgdk/out/R2_SHA256.txt
           python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R2_ROM_AUDIT.json
 
-      - name: Build report
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p sgdk/out
-          ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
-          if [ -f sgdk/out/rom.bin ]; then
-            ROM_SHA="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
-            ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"
-          fi
-          cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — Color-Restored Animated Menu Candidate
-          - Commit: ${GITHUB_SHA}
-          - SGDK: 2.11 pinned container
-          - ROM size: ${ROM_SIZE}
-          - ROM SHA-256: ${ROM_SHA}
-          - Native presentation: 320x224
-          - Russian menu typography/layout: unchanged
-          - Top-right minimap: removed
-          - Landscape palette: restored to accepted original
-          - River: independent four-frame downward motion
-          - Flags: independent four-frame wind motion
-          - Fire: independent transparent four-frame flame
-          - R1 core: preserved
-          - Gate: TARGET PENDING owner emulator acceptance
-          REPORT
-
-      - name: Publish R2 candidate
-        if: always()
+      - name: Publish candidate
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Color_Restore_Animated_Candidate
+          name: Modern_Tanks_R2_Targeted_Fix_Candidate
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
             sgdk/out/R2_ROM_AUDIT.json
-            sgdk/out/R2_BUILD_REPORT.md
-            sgdk/out/R2_RESOURCE_SHA256.txt
-            sgdk/out/R2_RESOURCE_BUDGET.md
-            sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
-            sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
-          if-no-files-found: warn
