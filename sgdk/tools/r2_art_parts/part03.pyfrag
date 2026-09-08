@@ -12,9 +12,7 @@ for yy in [48,128]:
 
 # tree clusters
 def tree(cx,cy,r=6):
-    # trunk
     d.rectangle([cx-1,cy+2,cx+1,cy+6],fill=I(0,7))
-    # canopy shadow and leaves
     d.ellipse([cx-r,cy-r,cx+r,cy+r],fill=I(0,2))
     d.ellipse([cx-r+1,cy-r,cx+r-2,cy+r-2],fill=I(0,4))
     d.ellipse([cx-r+2,cy-r+1,cx+2,cy+2],fill=I(0,5))
@@ -36,35 +34,58 @@ def crater(cx,cy,r=7):
 for p in [(39,66),(73,119),(246,91),(294,57),(20,157),(273,151)]:
     crater(*p)
 
-# detailed top-down battlefield tanks
-def btank(cx,cy,body,hi,dir=0):
-    # 0 R,1 D,2 L,3 U
-    # tracks
-    d.rectangle([cx-8,cy-6,cx+8,cy+6],fill=I(0,1))
-    if dir%2==0:
-        d.rectangle([cx-7,cy-7,cx+7,cy-4],fill=I(0,0))
-        d.rectangle([cx-7,cy+4,cx+7,cy+7],fill=I(0,0))
-        d.rectangle([cx-6,cy-5,cx+6,cy+5],fill=body)
-    else:
-        d.rectangle([cx-7,cy-7,cx-4,cy+7],fill=I(0,0))
-        d.rectangle([cx+4,cy-7,cx+7,cy+7],fill=I(0,0))
-        d.rectangle([cx-5,cy-6,cx+5,cy+6],fill=body)
-    # bevel
-    d.line([cx-5,cy-4,cx+4,cy-4],fill=hi)
-    # turret
-    d.ellipse([cx-3,cy-3,cx+3,cy+3],fill=hi)
-    d.rectangle([cx-2,cy-2,cx+2,cy+2],fill=body)
-    if dir==0: d.rectangle([cx+2,cy-1,cx+11,cy],fill=hi)
-    elif dir==2: d.rectangle([cx-11,cy-1,cx-2,cy],fill=hi)
-    elif dir==1: d.rectangle([cx-1,cy+2,cx,cy+11],fill=hi)
-    else: d.rectangle([cx-1,cy-11,cx,cy-2],fill=hi)
+# compact detailed top-down battlefield tanks.
+# Art direction follows TANKS_DETAILED_REFERENCE: visible tracks, shaped hull,
+# turret ring, hatch/bolts and a real gun barrel rather than a rectangle icon.
+def btank(cx,cy,body,hi,dir=3,variant=0):
+    def P(dx,dy):
+        if dir==3: return (cx+dx,cy+dy)       # up
+        if dir==1: return (cx-dx,cy-dy)       # down
+        if dir==0: return (cx-dy,cy+dx)       # right
+        return (cx+dy,cy-dx)                  # left
+    w=[5,6,7,6][variant&3]
+    outer=w+3
+    dark=I(0,1); track=I(0,0); metal=I(0,11); shine=I(0,15)
+    # separated caterpillar tracks
+    d.polygon([P(-outer,-7),P(-w,-7),P(-w,7),P(-outer,7)],fill=track)
+    d.polygon([P(w,-7),P(outer,-7),P(outer,7),P(w,7)],fill=track)
+    for yy in (-5,-1,3,6):
+        d.line([P(-outer+1,yy),P(-w-1,yy)],fill=metal)
+        d.line([P(w+1,yy),P(outer-1,yy)],fill=metal)
+    # tapered armoured hull
+    hull=[(-w+1,-6),(w-1,-6),(w,-3),(w,5),(w-2,7),(-w+2,7),(-w,5),(-w,-3)]
+    d.polygon([P(x,y) for x,y in hull],fill=body)
+    d.line([P(-w+2,-5),P(w-2,-5)],fill=hi)
+    d.line([P(-w+1,-3),P(-w+1,4)],fill=hi)
+    # class-specific side armour / engine deck
+    if variant==1:
+        d.polygon([P(-w,0),P(-w+2,-2),P(-w+2,5),P(-w,4)],fill=metal)
+        d.polygon([P(w,0),P(w-2,-2),P(w-2,5),P(w,4)],fill=metal)
+    elif variant==2:
+        d.rectangle([min(P(-w+1,3)[0],P(w-1,6)[0]),min(P(-w+1,3)[1],P(w-1,6)[1]),max(P(-w+1,3)[0],P(w-1,6)[0]),max(P(-w+1,3)[1],P(w-1,6)[1])],fill=metal)
+    elif variant==3:
+        d.polygon([P(-w,-2),P(-2,-5),P(-2,4),P(-w+1,5)],fill=hi)
+        d.polygon([P(w,-2),P(2,-5),P(2,4),P(w-1,5)],fill=hi)
+    # turret ring and turret
+    d.ellipse([cx-4,cy-4,cx+4,cy+4],fill=dark)
+    d.ellipse([cx-3,cy-3,cx+3,cy+3],fill=body)
+    d.line([P(-2,-2),P(2,-2)],fill=hi)
+    d.rectangle([cx-1,cy-1,cx+1,cy+1],fill=metal)
+    d.point((cx,cy),fill=shine)
+    # mantlet + long gun
+    d.line([P(0,-3),P(0,-12 if variant!=2 else -10)],fill=hi,width=2 if variant!=2 else 3)
+    d.point(P(0,-12 if variant!=2 else -10),fill=shine)
+    # tiny headlights / bolts
+    for px,py in [(-w+2,-4),(w-2,-4),(-w+2,4),(w-2,4)]:
+        d.point(P(px,py),fill=shine)
+
 for args in [
-    (22,86,I(0,4),I(0,5),0),
-    (72,18,I(0,12),I(0,14),1),
-    (284,95,I(0,14),I(0,15),2),
-    (53,154,I(0,15),I(0,11),3),
-    (267,40,I(0,3),I(0,5),2),
-    (308,142,I(0,12),I(0,14),3),
+    (22,86,I(0,4),I(0,5),0,0),
+    (72,18,I(0,12),I(0,14),1,1),
+    (284,95,I(0,14),I(0,15),2,3),
+    (53,154,I(0,5),I(0,15),3,2),
+    (267,40,I(0,3),I(0,5),2,1),
+    (308,142,I(0,12),I(0,14),3,3),
 ]:
     btank(*args)
 
