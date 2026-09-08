@@ -10,9 +10,10 @@
  * - accepted Russian menu typography retained
  * - top-right minimap removed from the menu background
  * - detailed battlefield background with original accepted color balance
- * - decorative flag overlays removed; only the accepted static background remains
- * - river ambience animated in a downward-flow cycle
- * - burning wreck fire animation
+ * - only the right-side flag is animated; its cloth is removed from the static background
+ * - river ambience is an eight-frame masked downward-flow cycle, confined to water only
+ * - two independent fire animations; static flame/glow pixels removed from the background
+ * - animation tones reuse the scene palettes and do not introduce a brighter palette
  * - no detached decorative tank and no lower stat/minimap strip
  */
 
@@ -45,9 +46,11 @@ typedef struct
 #define R2_LOGIC_HZ 60
 #define R2_BOOT_TICKS 60
 #define R2_MENU_COUNT 4
-#define R2_ANIM_FRAMES 4
-#define R2_RIVER_HOLD_TICKS 5
-#define R2_FIRE_HOLD_TICKS 4
+#define R2_ANIM_FRAMES 8
+#define R2_RIVER_HOLD_TICKS 7
+#define R2_FLAG_HOLD_TICKS 8
+#define R2_FIRE_TOP_HOLD_TICKS 5
+#define R2_FIRE_BOTTOM_HOLD_TICKS 6
 
 #define R2_SELECTOR_X 11
 #define R2_SELECTOR_W 18
@@ -57,8 +60,12 @@ typedef struct
 /* Overlay positions are tile aligned to the native 320x224 composition. */
 #define R2_RIVER_X 0
 #define R2_RIVER_Y 0
-#define R2_FIRE_X 31
-#define R2_FIRE_Y 6
+#define R2_FLAG_RIGHT_X 36
+#define R2_FLAG_RIGHT_Y 13
+#define R2_FIRE_TOP_X 30
+#define R2_FIRE_TOP_Y 5
+#define R2_FIRE_BOTTOM_X 29
+#define R2_FIRE_BOTTOM_Y 17
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -77,12 +84,18 @@ static const char *lastError = "NONE";
 static u16 patchTileBase = 0;
 static u16 selectorTileBase = 0;
 static u16 riverTileBase = 0;
-static u16 fireTileBase = 0;
+static u16 flagRightTileBase = 0;
+static u16 fireTopTileBase = 0;
+static u16 fireBottomTileBase = 0;
 static u16 selectorPulse = 0;
 static u16 riverAnimTick = 0;
-static u16 fireAnimTick = 0;
+static u16 flagAnimTick = 0;
+static u16 fireTopAnimTick = 0;
+static u16 fireBottomAnimTick = 0;
 static u16 riverAnimFrame = 0;
-static u16 fireAnimFrame = 0;
+static u16 flagAnimFrame = 0;
+static u16 fireTopAnimFrame = 0;
+static u16 fireBottomAnimFrame = 3;
 static bool menuArtLoaded = FALSE;
 
 /* Native pixel Y rows 88/104/120/136 -> tile rows 11/13/15/17. */
@@ -90,12 +103,26 @@ static const u16 selectorY[R2_MENU_COUNT] = {11, 13, 15, 17};
 
 static const Image * const riverFrames[R2_ANIM_FRAMES] =
 {
-    &r2_river_0, &r2_river_1, &r2_river_2, &r2_river_3
+    &r2_river_0, &r2_river_1, &r2_river_2, &r2_river_3,
+    &r2_river_4, &r2_river_5, &r2_river_6, &r2_river_7
 };
 
-static const Image * const fireFrames[R2_ANIM_FRAMES] =
+static const Image * const flagRightFrames[R2_ANIM_FRAMES] =
 {
-    &r2_fire_0, &r2_fire_1, &r2_fire_2, &r2_fire_3
+    &r2_flag_right_0, &r2_flag_right_1, &r2_flag_right_2, &r2_flag_right_3,
+    &r2_flag_right_4, &r2_flag_right_5, &r2_flag_right_6, &r2_flag_right_7
+};
+
+static const Image * const fireTopFrames[R2_ANIM_FRAMES] =
+{
+    &r2_fire_top_0, &r2_fire_top_1, &r2_fire_top_2, &r2_fire_top_3,
+    &r2_fire_top_4, &r2_fire_top_5, &r2_fire_top_6, &r2_fire_top_7
+};
+
+static const Image * const fireBottomFrames[R2_ANIM_FRAMES] =
+{
+    &r2_fire_bottom_0, &r2_fire_bottom_1, &r2_fire_bottom_2, &r2_fire_bottom_3,
+    &r2_fire_bottom_4, &r2_fire_bottom_5, &r2_fire_bottom_6, &r2_fire_bottom_7
 };
 
 static ResourceBank state_bank(GameState state)
@@ -139,11 +166,16 @@ static bool palettes_are_black(void)
     return TRUE;
 }
 
-static u16 max4(u16 a, u16 b, u16 c, u16 d)
+static u16 max8(u16 a, u16 b, u16 c, u16 d, u16 e, u16 f, u16 g, u16 h)
 {
-    u16 m = (a > b) ? a : b;
+    u16 m = a;
+    if (b > m) m = b;
     if (c > m) m = c;
     if (d > m) m = d;
+    if (e > m) m = e;
+    if (f > m) m = f;
+    if (g > m) m = g;
+    if (h > m) m = h;
     return m;
 }
 
@@ -212,22 +244,46 @@ static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
 
 static void draw_river_frame(u16 frame)
 {
+    /* River pixels are 0..15 and deliberately use the already-loaded PAL1 water bank. */
     VDP_drawImageEx(BG_A,
                     riverFrames[frame],
-                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, riverTileBase),
+                    TILE_ATTR_FULL(PAL1, TRUE, FALSE, FALSE, riverTileBase),
                     R2_RIVER_X,
                     R2_RIVER_Y,
                     FALSE,
                     TRUE);
 }
 
-static void draw_fire_frame(u16 frame)
+static void draw_flag_right_frame(u16 frame)
+{
+    /* Flag pixels use PAL3, matching the muted terrain/flag tones in the accepted background. */
+    VDP_drawImageEx(BG_A,
+                    flagRightFrames[frame],
+                    TILE_ATTR_FULL(PAL3, TRUE, FALSE, FALSE, flagRightTileBase),
+                    R2_FLAG_RIGHT_X,
+                    R2_FLAG_RIGHT_Y,
+                    FALSE,
+                    TRUE);
+}
+
+static void draw_fire_top_frame(u16 frame)
 {
     VDP_drawImageEx(BG_A,
-                    fireFrames[frame],
-                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, fireTileBase),
-                    R2_FIRE_X,
-                    R2_FIRE_Y,
+                    fireTopFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, fireTopTileBase),
+                    R2_FIRE_TOP_X,
+                    R2_FIRE_TOP_Y,
+                    FALSE,
+                    TRUE);
+}
+
+static void draw_fire_bottom_frame(u16 frame)
+{
+    VDP_drawImageEx(BG_A,
+                    fireBottomFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, fireBottomTileBase),
+                    R2_FIRE_BOTTOM_X,
+                    R2_FIRE_BOTTOM_Y,
                     FALSE,
                     TRUE);
 }
@@ -238,16 +294,15 @@ static void draw_menu_art(void)
     u16 patchTiles;
     u16 selectorTiles;
     u16 riverTiles;
-    u16 fireTiles;
+    u16 flagRightTiles;
+    u16 fireTopTiles;
+    u16 fireBottomTiles;
     u16 nextTile;
 
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 
-    /*
-     * 8bpp indexed source: upper two index bits choose PAL0..PAL3 per 8x8 tile.
-     * This keeps the maximum-detail 64-color menu art within normal Mega Drive rules.
-     */
+    /* 64-color indexed battlefield: accepted background palette is the authority. */
     VDP_drawImageEx(BG_B,
                     &r2_menu_bg,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, TILE_USER_INDEX),
@@ -260,7 +315,6 @@ static void draw_menu_art(void)
     patchTiles = r2_top_right_patch.tileset->numTile;
     patchTileBase = TILE_USER_INDEX + bgTiles;
 
-    /* Replace the old top-right minimap directly with battlefield terrain. */
     VDP_drawImageEx(BG_B,
                     &r2_top_right_patch,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, patchTileBase),
@@ -270,21 +324,33 @@ static void draw_menu_art(void)
                     TRUE);
 
     selectorTiles = r2_selector.tileset->numTile;
-    riverTiles = max4(r2_river_0.tileset->numTile,
-                      r2_river_1.tileset->numTile,
-                      r2_river_2.tileset->numTile,
-                      r2_river_3.tileset->numTile);
-    fireTiles = max4(r2_fire_0.tileset->numTile,
-                     r2_fire_1.tileset->numTile,
-                     r2_fire_2.tileset->numTile,
-                     r2_fire_3.tileset->numTile);
+    riverTiles = max8(r2_river_0.tileset->numTile, r2_river_1.tileset->numTile,
+                      r2_river_2.tileset->numTile, r2_river_3.tileset->numTile,
+                      r2_river_4.tileset->numTile, r2_river_5.tileset->numTile,
+                      r2_river_6.tileset->numTile, r2_river_7.tileset->numTile);
+    flagRightTiles = max8(r2_flag_right_0.tileset->numTile, r2_flag_right_1.tileset->numTile,
+                          r2_flag_right_2.tileset->numTile, r2_flag_right_3.tileset->numTile,
+                          r2_flag_right_4.tileset->numTile, r2_flag_right_5.tileset->numTile,
+                          r2_flag_right_6.tileset->numTile, r2_flag_right_7.tileset->numTile);
+    fireTopTiles = max8(r2_fire_top_0.tileset->numTile, r2_fire_top_1.tileset->numTile,
+                        r2_fire_top_2.tileset->numTile, r2_fire_top_3.tileset->numTile,
+                        r2_fire_top_4.tileset->numTile, r2_fire_top_5.tileset->numTile,
+                        r2_fire_top_6.tileset->numTile, r2_fire_top_7.tileset->numTile);
+    fireBottomTiles = max8(r2_fire_bottom_0.tileset->numTile, r2_fire_bottom_1.tileset->numTile,
+                           r2_fire_bottom_2.tileset->numTile, r2_fire_bottom_3.tileset->numTile,
+                           r2_fire_bottom_4.tileset->numTile, r2_fire_bottom_5.tileset->numTile,
+                           r2_fire_bottom_6.tileset->numTile, r2_fire_bottom_7.tileset->numTile);
 
     selectorTileBase = patchTileBase + patchTiles;
     nextTile = selectorTileBase + selectorTiles;
     riverTileBase = nextTile;
     nextTile += riverTiles;
-    fireTileBase = nextTile;
-    nextTile += fireTiles;
+    flagRightTileBase = nextTile;
+    nextTile += flagRightTiles;
+    fireTopTileBase = nextTile;
+    nextTile += fireTopTiles;
+    fireBottomTileBase = nextTile;
+    nextTile += fireBottomTiles;
 
     if ((nextTile - 1) > TILE_USER_MAX_INDEX)
     {
@@ -294,14 +360,20 @@ static void draw_menu_art(void)
     }
 
     riverAnimTick = 0;
-    fireAnimTick = 0;
+    flagAnimTick = 0;
+    fireTopAnimTick = 0;
+    fireBottomAnimTick = 0;
     riverAnimFrame = 0;
-    fireAnimFrame = 0;
-    draw_river_frame(riverAnimFrame);
-    draw_fire_frame(fireAnimFrame);
+    flagAnimFrame = 0;
+    fireTopAnimFrame = 0;
+    fireBottomAnimFrame = 3;
 
-    /* River image spans 14 tile columns and can rewrite transparent BG_A cells,
-       therefore selector is always redrawn after each ambient frame. */
+    draw_river_frame(riverAnimFrame);
+    draw_flag_right_frame(flagAnimFrame);
+    draw_fire_top_frame(fireTopAnimFrame);
+    draw_fire_bottom_frame(fireBottomAnimFrame);
+
+    /* Ambient BG_A tiles can touch the selector area, so selector remains authoritative. */
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -330,12 +402,28 @@ static void update_menu_visuals(void)
         draw_selector(menuIndex, menuIndex, TRUE);
     }
 
-    fireAnimTick++;
-    if (fireAnimTick >= R2_FIRE_HOLD_TICKS)
+    flagAnimTick++;
+    if (flagAnimTick >= R2_FLAG_HOLD_TICKS)
     {
-        fireAnimTick = 0;
-        fireAnimFrame = (fireAnimFrame + 1) % R2_ANIM_FRAMES;
-        draw_fire_frame(fireAnimFrame);
+        flagAnimTick = 0;
+        flagAnimFrame = (flagAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_flag_right_frame(flagAnimFrame);
+    }
+
+    fireTopAnimTick++;
+    if (fireTopAnimTick >= R2_FIRE_TOP_HOLD_TICKS)
+    {
+        fireTopAnimTick = 0;
+        fireTopAnimFrame = (fireTopAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_fire_top_frame(fireTopAnimFrame);
+    }
+
+    fireBottomAnimTick++;
+    if (fireBottomAnimTick >= R2_FIRE_BOTTOM_HOLD_TICKS)
+    {
+        fireBottomAnimTick = 0;
+        fireBottomAnimFrame = (fireBottomAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_fire_bottom_frame(fireBottomAnimFrame);
     }
 }
 
