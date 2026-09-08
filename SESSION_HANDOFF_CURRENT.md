@@ -6,7 +6,8 @@
 
 - Идею Modern Tanks не менять.
 - Три locked PNG reference не изменять/не перекодировать/не заменять.
-- `TANKS_DETAILED_REFERENCE.png` — обязательный art-direction танков.
+- `MAIN_MENU_REFERENCE.png` — обязательный визуальный target главного меню.
+- `TANKS_DETAILED_REFERENCE.png` — обязательный art-direction/геометрический target танков.
 - Granada — только технический образец Mega Drive.
 - Старая DEV-линия запрещена.
 - Clean SGDK 2.11 rebuild only.
@@ -18,69 +19,60 @@
 
 ## 3. R2 MAIN MENU VISUAL TARGET
 
-Статус: **FOCUSED MENU / TANK REFERENCE REWORK — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
+Статус: **REFERENCE-FAITHFUL REWORK — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
 
 R3 не начинать до прямого принятия R2 владельцем.
 
-## 4. Последнее обязательное решение владельца
-
-После проверки предыдущего R2 владелец уточнил компоновку:
+## 4. Обязательное решение владельца по компоновке
 
 - убрать из главного меню нижний HUD `T-1..T-4 / параметры / карта`;
-- эта панель не несла функции в MAIN MENU и перегружала экран;
 - выбор/характеристики танка относятся к `ГАРАЖ`;
 - карта и миссионная информация относятся к миссионным/игровым экранам;
-- полностью убрать декоративный движущийся танк наверху/на фоне меню.
+- полностью убрать отдельный декоративный движущийся танк;
+- сохранить четыре канонических пункта: `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`.
 
-Текущий R2 это решение реализует: поле боя продолжается до нижнего края 320×224, а единственная текущая UI-анимация — pulse активного пункта меню.
+Текущий R2 это решение реализует. Единственная текущая UI-анимация — pulse/навигация активного пункта меню.
 
-## 5. Танки
+## 5. Новое правило визуальной реализации R2
 
-Танки больше не строятся как простые прямоугольные пиктограммы.
+Предыдущая ручная стилизация танков и поля признана недостаточно похожей на утверждённые примеры и больше не является target.
 
-Вручную нарисован reference-driven native pixel renderer с признаками:
+Текущий R2 строится как reference-faithful Mega Drive adaptation:
 
-- строгий top-down;
-- отдельные гусеницы и tread-сегменты;
-- бронекорпус со скосами;
-- башня/погон;
-- маска орудия и длинный ствол;
-- люк/командирская башенка, болты, моторная палуба/бортовые модули;
-- разные пропорции T-1 разведчика, T-2 рейнджера, T-3 крепости и T-4 штурмовика.
+- композиция, battlefield/metal/logo visual language берутся непосредственно из утверждённого `MAIN_MENU_REFERENCE.png`;
+- формы и внешний язык T-1/T-2/T-3/T-4 берутся непосредственно из `TANKS_DETAILED_REFERENCE.png`;
+- runtime asset адаптируется к native Mega Drive `320x224` и допустимой палитре/тайлам;
+- исходные locked reference PNG не изменяются и не заменяются;
+- запрещено подменять работу отдельной AI-generated картинкой;
+- R2 должен оцениваться по визуальной близости к утверждённым reference, а не по принципу «стало немного лучше».
 
-В R2 эти машины используются только как статичная часть battlefield art. Финальный gameplay sprite-set относится к последующим этапам и не должен начинаться раньше плана.
+## 6. Текущий CI candidate
 
-## 6. Текущий CI
-
-- GitHub Actions run: `34186426856` — SUCCESS;
-- tested commit: `831cd8348997cdb13e82cfc8422c6748f3e0e0b1`;
-- SGDK 2.11 build A/B: PASS, byte-identical;
-- ROM audit: PASS;
+- GitHub Actions run: `34189204407` — **SUCCESS**;
+- tested commit: `6ebd952febbc29dec71f0278f7b00f2a1f8c804c`;
+- SGDK 2.11 build A/B: **PASS, byte-identical**;
+- ROM audit: **PASS**;
 - ROM size: `131072` bytes;
-- SHA-256: `d4baf97f7884ae0e91be0bc599d11046959fae88407c2db7235dd37726dc47f4`;
-- header checksum: `0x6DF1`;
-- XOR-fold: `0x0000`.
+- SHA-256: `f73f2e80107ce25a5622f0e9d5f6dc84c3d0f1b7375178b3355132e58305c082`;
+- header checksum: `0x4215`;
+- required checksum: `0x4215`;
+- XOR-fold: `0x0000`;
+- console header: `SEGA MEGA DRIVE`;
+- input contract: standard 3-button controller.
 
-Resource budget from CI:
+CI дополнительно проверяет SHA исходного подготовленного R2 background asset перед SGDK-сборкой, чтобы повреждённая/обрезанная передача графики не могла тихо попасть в ROM.
 
-- 950 unique background tiles;
-- worst selector 24 tiles;
-- conservative simultaneous project patterns: 974 tiles / 31,168 bytes;
-- 13,888 bytes free vs project 44 KiB ceiling;
-- menu VDP sprite payload: 0;
-- moving tank resource removed.
+## 7. Что проверить владельцу
 
-После tested commit также удалён старый неиспользуемый `sgdk/art/r2_anim_tank.png.b64`; это неиспользуемый source artifact и на собранный ROM не влияет.
+Только target-проверка текущего R2 ROM в MD Emu Games Gen:
 
-## 7. Следующий шаг
-
-Только target-проверка текущего R2 ROM владельцем:
-
-- визуально оценить новое более чистое меню;
-- сравнить статичные танки с `TANKS_DETAILED_REFERENCE.png`;
-- проверить Up/Down selector;
+- общий визуальный язык и композицию против `MAIN_MENU_REFERENCE.png`;
+- формы/детализацию танков против `TANKS_DETAILED_REFERENCE.png`;
+- отсутствие нижнего HUD `танки / параметры / карта`;
+- отсутствие отдельного ездящего декоративного танка;
+- Up/Down selector;
 - ИГРАТЬ → TEST_BATTLE → B → MENU;
 - ГАРАЖ → GARAGE → B → MENU;
-- убедиться, что переходы не дают corruption/ERR.
+- отсутствие corruption/ERR при переходах.
 
 **R2 пока НЕ ACCEPTED. R3 BLOCKED.**
