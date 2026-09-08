@@ -1,42 +1,62 @@
-# Modern Tanks — R0
+# Modern Tanks — Clean Rebuild
 
-Этот репозиторий содержит чистую перезапуск-сборку проекта **Modern Tanks** для Sega Mega Drive / Genesis на SGDK 2.11.
+Чистая rebuild-линия **Modern Tanks** для Sega Mega Drive / Genesis на SGDK 2.11.
 
-Текущий этап: **R0 HARDWARE PROBE — SOURCE V3 READY**.
+## Текущий статус
 
-## Что проверяет R0
+- **R0 Hardware Probe — ACCEPTED / CLOSED** 2026-09-08 после фактической проверки владельцем в MD Emu Games Gen.
+- **R1 Core / State Machine — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
+- **R2 и далее — BLOCKED** до прямого пользовательского PASS R1.
 
-R0 намеренно не является игрой. Это минимальный аппаратный/SDK-пробник перед переносом игровых механик:
+R1 GitHub Actions run `34176727527` завершён SUCCESS. Две clean SGDK 2.11 сборки совпали byte-for-byte; ROM audit PASS. R1 ROM SHA-256: `4fdc8d3d8ef9f723caf228b61f183b1fea927bee93727028f6e0a414cf6a726a`.
 
-1. **R0A** — стандартный SGDK startup, VDP и raw `VDP_waitVSync()` без системного VBlank pipeline.
-2. **R0B** — переход на штатный `SYS_doVBlankProcess()`.
-3. **R0C** — включение `JOY_SUPPORT_3BTN`, чтение D-Pad/A/B/C/START и визуальная реакция.
+## Жёсткие правила
 
-## Почему так
+- идею Modern Tanks не менять;
+- `design/GAME_DESIGN_FROZEN.md` — источник истины по игре;
+- старую DEV-линию, DEV ROM и Python opcode-emitter не использовать;
+- три PNG reference не изменять и не перекодировать;
+- Granada используется **только как технический образец** Mega Drive/VDP/resource discipline; её code/assets/maps/music/game rules не переносятся;
+- обязательный базовый input path — 3-button controller.
 
-Предыдущий DEV-подход с самодельным bootstrap/opcode-emitter удалён. Новая реализация строится от проверенной базы **Granada** и штатной архитектуры SGDK.
+## R1 scope
 
-Пока R0 ROM не пройдёт аппаратный/эмуляторный acceptance gate, перенос карты, танков, AI, оружия, SRAM и прочих игровых систем запрещён.
+Только:
 
-## Сборка
+- BOOT;
+- TITLE;
+- MAIN_MENU shell;
+- TEST_BATTLE shell;
+- GARAGE shell;
+- state transitions;
+- 3-button input abstraction;
+- NTSC/PAL timing;
+- debug/error layer;
+- clean state enter/leave hooks;
+- resource bank load/unload API;
+- встроенный 100-transition soak test.
 
-### Docker
+Финальная графика меню, battle renderer, tank art, world, AI, SRAM и audio относятся к последующим стадиям.
 
-```sh
-cd sgdk
-./build_r0_docker.sh
-```
+## R1 target test
 
-### GitHub Actions
+В MAIN MENU кнопка **C** запускает 100 переходов — 25 циклов:
 
-Workflow: `.github/workflows/r0-build.yml`
+`MENU → TEST_BATTLE → MENU → GARAGE → MENU`
 
-Он выполняет две независимые сборки SGDK 2.11 из одного exact Docker image ID, сравнивает ROM побайтно, проверяет заголовок/чексум и публикует артефакт.
+Ожидаемый итог: `SOAK: PASS 100/100`, `ERR: 00`, `STATE: MAIN_MENU`, `BANK: MENU`, после чего ручной input должен продолжать работать.
 
-## Документы
+## GitHub Actions
 
-- `00_START_HERE_NEXT_SESSION.md` — точка входа для новой сессии.
-- `SESSION_HANDOFF_CURRENT.md` — текущее состояние и следующий шаг.
-- `design/GAME_DESIGN_FROZEN.md` — замороженная идея игры.
-- `plan/REBUILD_MASTER_PLAN.md` — новый rebuild-план.
-- `tests/r0/R0_ACCEPTANCE_CHECKLIST.md` — обязательные критерии R0.
+Workflow: `.github/workflows/r0-build.yml` — историческое имя файла сохранено, но workflow сейчас собирает R1.
+
+CI выполняет две независимые clean builds из одного exact SGDK 2.11 Docker image ID, byte comparison, ROM header/checksum audit, SHA-256 и artifact publication.
+
+## Точки входа
+
+- `SESSION_HANDOFF_CURRENT.md`
+- `plan/REBUILD_MASTER_PLAN.md`
+- `plan/ACCEPTANCE_GATES.md`
+- `tests/r0/R0_ACCEPTANCE_RESULT.md`
+- `tests/r1/R1_BUILD_STATUS.md`
+- `tests/r1/R1_ACCEPTANCE_CHECKLIST.md`
