@@ -1,0 +1,89 @@
+name: R0 SGDK hardware probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'sgdk/**'
+      - '.github/workflows/r0-build.yml'
+
+jobs:
+  build-r0:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pin exact container image for this run
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          IMAGE_ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          IMAGE_DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          test -n "$IMAGE_ID"
+          test -n "$IMAGE_DIGEST"
+          mkdir -p sgdk/out
+          printf '%s\n' "$IMAGE_ID" > sgdk/out/R0_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$IMAGE_DIGEST" > sgdk/out/R0_TOOLCHAIN_IMAGE_DIGEST.txt
+          printf 'SGDK_IMAGE_ID=%s\n' "$IMAGE_ID" >> "$GITHUB_ENV"
+
+      - name: Prepare two clean writable build trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sgdk-r0-a /tmp/sgdk-r0-b
+          cp -a sgdk /tmp/sgdk-r0-a
+          cp -a sgdk /tmp/sgdk-r0-b
+          # docker-sgdk runs as an unprivileged `m68k` user.
+          chmod -R a+rwX /tmp/sgdk-r0-a /tmp/sgdk-r0-b
+
+      - name: Build A with pinned SGDK 2.11 image ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v /tmp/sgdk-r0-a:/m68k \
+            "$SGDK_IMAGE_ID"
+
+      - name: Build B with the exact same image ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v /tmp/sgdk-r0-b:/m68k \
+            "$SGDK_IMAGE_ID"
+
+      - name: Prove reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/sgdk-r0-a/out/rom.bin
+          test -f /tmp/sgdk-r0-b/out/rom.bin
+          cmp /tmp/sgdk-r0-a/out/rom.bin /tmp/sgdk-r0-b/out/rom.bin
+          cp /tmp/sgdk-r0-a/out/rom.bin sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R0_SHA256.txt
+
+      - name: Independent ROM header/checksum audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R0_ROM_AUDIT.json
+
+      - name: Publish R0 ROM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R0_Hardware_Probe
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R0_SHA256.txt
+            sgdk/out/R0_ROM_AUDIT.json
+            sgdk/out/R0_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R0_TOOLCHAIN_IMAGE_DIGEST.txt
+          if-no-files-found: error
