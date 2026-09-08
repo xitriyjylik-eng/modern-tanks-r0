@@ -20,10 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate native R2 indexed assets
+      - name: Restore and validate exact R2 indexed assets
         shell: bash
         run: |
           set -euo pipefail
+          python3 sgdk/tools/restore_r2_assets.py
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
           python3 - <<'PY'
           from PIL import Image
@@ -51,18 +52,17 @@ jobs:
               if im.size != size:
                   raise SystemExit(f'{path}: size {im.size} != {size}')
 
-          # ResComp 8bpp tile contract:
-          # palette-select bits 4-5 must be constant inside every 8x8 tile.
+          # ResComp 8bpp tile contract: palette-select bits 4-5 must be
+          # constant inside every 8x8 tile.
           bg = Image.open(bg_path)
           bg.load()
           bad = []
           palette_use = [0, 0, 0, 0]
           for ty in range(0, bg.height, 8):
               for tx in range(0, bg.width, 8):
-                  vals = []
-                  for y in range(ty, ty + 8):
-                      for x in range(tx, tx + 8):
-                          vals.append(bg.getpixel((x, y)))
+                  vals = [bg.getpixel((x, y))
+                          for y in range(ty, ty + 8)
+                          for x in range(tx, tx + 8)]
                   banks = {((v >> 4) & 3) for v in vals}
                   if len(banks) != 1:
                       bad.append((tx, ty, sorted(banks)))
@@ -78,13 +78,13 @@ jobs:
           if 15 not in set(sel.getdata()):
               raise SystemExit('Selector gold index 15 missing')
 
-          print('R2 native asset validation PASS; palette-tile counts:', palette_use)
+          print('R2 exact asset validation PASS; palette-tile counts:', palette_use)
           PY
 
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
 
-      - name: Audit R2 tile usage without arbitrary project ceiling
+      - name: Audit R2 tile usage against real VDP space
         shell: bash
         run: |
           set -euo pipefail
@@ -98,8 +98,7 @@ jobs:
               tiles = set()
               for y in range(0, im.height, 8):
                   for x in range(0, im.width, 8):
-                      tile = bytes(im.crop((x, y, x + 8, y + 8)).getdata())
-                      tiles.add(tile)
+                      tiles.add(bytes(im.crop((x, y, x + 8, y + 8)).getdata()))
               return len(tiles)
 
           bg = unique_tiles('sgdk/res/r2_menu_bg.png')
@@ -111,8 +110,8 @@ jobs:
               f'- Background unique indexed 8x8 tiles before ResComp duplicate/flip optimization: **{bg}**.\n'
               f'- Selector unique indexed tiles: **{selector}**.\n'
               f'- Conservative raw pattern bytes before ResComp savings: **{raw}**.\n'
-              '- No artificial 44 KiB project ceiling is applied.\n'
-              '- Actual SGDK/VDP available tile space is checked by runtime against TILE_USER_MAX_INDEX.\n'
+              '- No artificial project graphics ceiling is applied.\n'
+              '- Runtime checks actual SGDK/VDP user tile space via TILE_USER_MAX_INDEX.\n'
               '- Background uses per-tile PAL0..PAL3 assignment supported by ResComp 8bpp indexed images.\n'
               '- Lower tank/stat/minimap HUD: removed.\n'
               '- Detached decorative moving tank: removed.\n'
