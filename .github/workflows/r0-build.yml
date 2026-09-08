@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate native-resolution R2 art
+      - name: Decode reference-faithful R2 game assets
         shell: bash
         run: |
           set -euo pipefail
@@ -42,7 +42,7 @@ jobs:
               im.load()
               assert im.mode == 'P', (name, im.mode)
               assert im.size == size, (name, im.size)
-          print('R2 generated art validation PASS')
+          print('R2 reference-faithful asset validation PASS')
           PY
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_sel_0.png sgdk/res/r2_sel_1.png sgdk/res/r2_sel_2.png sgdk/res/r2_sel_3.png > sgdk/out/R2_RESOURCE_SHA256.txt
@@ -68,27 +68,28 @@ jobs:
           ceiling=44*1024
           free=ceiling-raw
           Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-              '# R2 resource budget — Focused Menu Rework\n\n'
+              '# R2 resource budget — Reference-Faithful Rework\n\n'
               f'- Background unique 8x8 tiles before ResComp optimization: **{bg}**.\n'
               f'- Selector unique tiles: **{sels}**; only one selector image is resident at a time.\n'
               f'- Conservative simultaneous project-pattern upper bound: **{worst} tiles / {raw} bytes**.\n'
               f'- Against the project 44 KiB pattern ceiling: **{free} bytes free** before ResComp duplicate/flip savings.\n'
-              '- Decorative moving-tank overlay: **removed**.\n'
-              '- Lower tank/stat/minimap HUD: **removed**; lower screen is continuous static battlefield.\n'
+              '- Detached decorative moving-tank overlay: **removed**.\n'
+              '- Lower tank/stat/minimap HUD: **removed by owner direction**.\n'
               '- Runtime recurring visual update: selector pulse/navigation only.\n'
-              '- Locked reference PNGs are not embedded or modified.\n',
+              '- Locked source reference PNG files are not modified or copied into sgdk/.\n'
+              '- Runtime menu art is a Mega Drive adaptation derived from the approved project references.\n',
               encoding='utf-8')
           if raw > ceiling:
               raise SystemExit(f'R2 project pattern budget exceeded: {raw}>{ceiling}')
           print('R2 resource budget PASS', bg, sels, raw, free)
           PY
 
-      - name: Verify R2 source and locked-art contract
+      - name: Verify R2 source and reference contract
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'Modern Tanks R2' sgdk/src/main.c
-          grep -q 'Focused Menu Rework' sgdk/src/main.c
+          grep -q 'Reference-Faithful Rework' sgdk/src/main.c
           grep -q 'r2_menu_bg' sgdk/src/main.c
           grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
           grep -q 'STATE_TEST_BATTLE' sgdk/src/main.c
@@ -169,18 +170,19 @@ jobs:
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
           # Modern Tanks R2 — CI Build Report
 
-          - Stage: R2 Main Menu Visual Target — Focused Menu / Tank Reference Rework
+          - Stage: R2 Main Menu Visual Target — Reference-Faithful Rework
           - Commit: ${GITHUB_SHA}
           - Toolchain: SGDK 2.11 via ${SGDK_IMAGE}
           - ROM size: ${ROM_SIZE} bytes
           - ROM SHA-256: ${ROM_SHA}
           - Reproducibility: two clean builds compared byte-for-byte before audit
           - Input contract: standard 3-button controller
-          - Included: accepted R1 core, native 320x224 menu, full-screen battlefield, hand-drawn reference-driven T-1/T-2/T-3/T-4 silhouettes, metallic logo, four canonical Russian menu items, animated selector pulse
-          - Removed by owner direction: lower tank-class/stat/minimap strip and decorative moving menu tank
+          - Included: accepted R1 core, native 320x224 Mega Drive menu, battlefield/metal/logo language derived from approved MAIN_MENU_REFERENCE, T-1/T-2/T-3/T-4 models derived from approved TANKS_DETAILED_REFERENCE, four canonical Russian menu items, selector pulse
+          - Removed by owner direction: lower tank-class/stat/minimap strip and detached decorative moving menu tank
           - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; tank/class selection belongs to GARAGE; map/mission context belongs outside the main menu
-          - Intentionally absent: R3 battle renderer/HUD, R4 final combat tank sprite set, world map streaming, gameplay/AI, SRAM, audio
-          - Locked reference PNG embedded/modified: NO
+          - Intentionally absent: R3 battle renderer/HUD, world map streaming, gameplay/AI, SRAM, audio
+          - Locked source reference files modified: NO
+          - Runtime game assets derived from approved project references: YES
           - Granada assets/code embedded: NO
           - Project VDP sprite payload in menu: 0
           - Runtime recurring visual update: selector pulse/navigation only
@@ -193,7 +195,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Focused_Menu_Tank_Rework
+          name: Modern_Tanks_R2_Reference_Faithful
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
