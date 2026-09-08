@@ -2,11 +2,16 @@
 #include "resources.h"
 
 /*
- * Modern Tanks R2 — Main Menu Visual Target / Reference-Faithful Rework
+ * Modern Tanks R2 — Final Main Menu Visual Target
  * Clean SGDK rebuild only. R1 core is accepted and preserved.
  * No old DEV code. No Granada assets/code.
- * Runtime art is derived from the project's locked visual references without
- * modifying those source PNGs; it is stored as deterministic game assets.
+ *
+ * Visual direction:
+ * - native 320x224 Mega Drive presentation
+ * - approved battlefield visual used as the direct art source
+ * - 8bpp indexed image with per-8x8-tile PAL0..PAL3 selection
+ * - no lower tank/stat/minimap strip
+ * - no detached decorative moving tank
  */
 
 typedef enum
@@ -38,10 +43,17 @@ typedef struct
 #define R2_LOGIC_HZ 60
 #define R2_BOOT_TICKS 60
 #define R2_MENU_COUNT 4
-#define R2_SELECTOR_X 14
-#define R2_SELECTOR_W 13
+
+/* Selector overlay is 144x16 = 18x2 tiles, aligned to the baked menu rows. */
+#define R2_SELECTOR_X 11
+#define R2_SELECTOR_W 18
 #define R2_SELECTOR_H 2
-#define R2_SELECTOR_CRAM_INDEX 33
+
+/*
+ * PAL0 entry 15 is reserved exclusively for the selector gold.
+ * Background art never uses PAL0 color 15, so the pulse does not alter the logo.
+ */
+#define R2_SELECTOR_CRAM_INDEX 15
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -61,15 +73,8 @@ static u16 selectorTileBase = 0;
 static u16 selectorPulse = 0;
 static bool menuArtLoaded = FALSE;
 
-/* Rows are aligned to the native 8x8 tile grid in the reference-faithful art. */
-static const u16 selectorY[R2_MENU_COUNT] = {12, 14, 16, 18};
-static const Image *selectorImages[R2_MENU_COUNT] =
-{
-    &r2_sel_0,
-    &r2_sel_1,
-    &r2_sel_2,
-    &r2_sel_3
-};
+/* Native pixel Y rows 88/104/120/136 -> tile rows 11/13/15/17. */
+static const u16 selectorY[R2_MENU_COUNT] = {11, 13, 15, 17};
 
 static ResourceBank state_bank(GameState state)
 {
@@ -156,24 +161,17 @@ static void resource_bank_load(ResourceBank bank)
     }
 }
 
-static u16 max_selector_tiles(void)
-{
-    u16 i;
-    u16 m = 0;
-
-    for (i = 0; i < R2_MENU_COUNT; i++)
-        if (selectorImages[i]->tileset->numTile > m) m = selectorImages[i]->tileset->numTile;
-
-    return m;
-}
-
 static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
 {
     if (!firstDraw)
-        VDP_clearTileMapRect(BG_A, R2_SELECTOR_X, selectorY[oldIndex], R2_SELECTOR_W, R2_SELECTOR_H);
+        VDP_clearTileMapRect(BG_A,
+                             R2_SELECTOR_X,
+                             selectorY[oldIndex],
+                             R2_SELECTOR_W,
+                             R2_SELECTOR_H);
 
     VDP_drawImageEx(BG_A,
-                    selectorImages[newIndex],
+                    &r2_selector,
                     TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, selectorTileBase),
                     R2_SELECTOR_X,
                     selectorY[newIndex],
@@ -184,10 +182,16 @@ static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
 static void draw_menu_art(void)
 {
     u16 bgTiles;
+    u16 selectorTiles;
 
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 
+    /*
+     * r2_menu_bg is an indexed 8bpp IMAGE.
+     * ResComp uses bits 4-5 of each tile's indices to select PAL0..PAL3,
+     * so the static menu can use all four Mega Drive sub-palettes.
+     */
     VDP_drawImageEx(BG_B,
                     &r2_menu_bg,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, TILE_USER_INDEX),
@@ -197,10 +201,17 @@ static void draw_menu_art(void)
                     TRUE);
 
     bgTiles = r2_menu_bg.tileset->numTile;
+    selectorTiles = r2_selector.tileset->numTile;
     selectorTileBase = TILE_USER_INDEX + bgTiles;
 
-    /* All four selector images share the same reference-faithful frame. */
-    (void) max_selector_tiles();
+    /* Actual SGDK/VDP tile-space guard; no arbitrary project ceiling. */
+    if ((selectorTileBase + selectorTiles - 1) > TILE_USER_MAX_INDEX)
+    {
+        set_error("R2_VRAM_TILES");
+        menuArtLoaded = FALSE;
+        return;
+    }
+
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -211,8 +222,8 @@ static void update_menu_visuals(void)
 {
     if (!menuArtLoaded) return;
 
-    /* Only the active-row frame pulses; there is no detached decorative tank. */
     selectorPulse++;
+
     if ((selectorPulse & 15) == 0)
     {
         if (selectorPulse & 16)
@@ -226,7 +237,7 @@ static void draw_boot(void)
 {
     VDP_setTextPalette(PAL0);
     VDP_drawText("MODERN TANKS", 14, 5);
-    VDP_drawText("R2 REFERENCE-FAITHFUL", 8, 9);
+    VDP_drawText("R2 FINAL VISUAL TARGET", 8, 9);
     VDP_drawText("R1 CORE ACCEPTED", 11, 13);
     VDP_drawText("LOADING MENU BANK...", 10, 17);
 }
@@ -235,7 +246,7 @@ static void draw_title(void)
 {
     VDP_setTextPalette(PAL0);
     VDP_drawText("MODERN TANKS", 14, 6);
-    VDP_drawText("R2 VISUAL BUILD", 12, 10);
+    VDP_drawText("R2 FINAL VISUAL BUILD", 9, 10);
     VDP_drawText("PRESS START OR A", 11, 15);
 }
 
@@ -315,6 +326,7 @@ static void change_state(GameState next)
 static void input_poll(void)
 {
     u16 current = JOY_readJoypad(JOY_1);
+
     input.held = current;
     input.pressed = current & (u16) ~previousPad;
     input.released = previousPad & (u16) ~current;
@@ -326,7 +338,8 @@ static void handle_input_frame(void)
     switch (currentState)
     {
         case STATE_TITLE:
-            if (input.pressed & (BUTTON_START | BUTTON_A)) change_state(STATE_MAIN_MENU);
+            if (input.pressed & (BUTTON_START | BUTTON_A))
+                change_state(STATE_MAIN_MENU);
             break;
 
         case STATE_MAIN_MENU:
@@ -354,7 +367,8 @@ static void handle_input_frame(void)
 
         case STATE_TEST_BATTLE:
         case STATE_GARAGE:
-            if (input.pressed & BUTTON_B) change_state(STATE_MAIN_MENU);
+            if (input.pressed & BUTTON_B)
+                change_state(STATE_MAIN_MENU);
             break;
 
         default:
@@ -368,11 +382,13 @@ static void update_logic_tick(void)
 
     if (currentState == STATE_BOOT)
     {
-        if (stateTicks >= R2_BOOT_TICKS) change_state(STATE_TITLE);
+        if (stateTicks >= R2_BOOT_TICKS)
+            change_state(STATE_TITLE);
         return;
     }
 
-    if (currentState == STATE_MAIN_MENU) update_menu_visuals();
+    if (currentState == STATE_MAIN_MENU)
+        update_menu_visuals();
 }
 
 int main(bool hardReset)
