@@ -35,7 +35,6 @@ jobs:
               'r2_sel_1.png': (104, 16),
               'r2_sel_2.png': (104, 16),
               'r2_sel_3.png': (104, 16),
-              'r2_anim_tank.png': (16, 16),
           }
           for name, size in required.items():
               p = Path('sgdk/res') / name
@@ -46,14 +45,50 @@ jobs:
           print('R2 generated art validation PASS')
           PY
           mkdir -p sgdk/out
-          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_sel_0.png sgdk/res/r2_sel_1.png sgdk/res/r2_sel_2.png sgdk/res/r2_sel_3.png sgdk/res/r2_anim_tank.png > sgdk/out/R2_RESOURCE_SHA256.txt
+          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_sel_0.png sgdk/res/r2_sel_1.png sgdk/res/r2_sel_2.png sgdk/res/r2_sel_3.png > sgdk/out/R2_RESOURCE_SHA256.txt
+
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+
+          def unique_tiles(path):
+              im = Image.open(path)
+              im.load()
+              tiles=set()
+              for y in range(0, im.height, 8):
+                  for x in range(0, im.width, 8):
+                      tile=bytes(im.crop((x,y,min(x+8,im.width),min(y+8,im.height))).getdata())
+                      tiles.add(tile)
+              return len(tiles)
+
+          bg=unique_tiles('sgdk/res/r2_menu_bg.png')
+          sels=[unique_tiles(f'sgdk/res/r2_sel_{i}.png') for i in range(4)]
+          worst=bg+max(sels)
+          raw=worst*32
+          ceiling=44*1024
+          free=ceiling-raw
+          Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
+              '# R2 resource budget — Focused Menu Rework\n\n'
+              f'- Background unique 8x8 tiles before ResComp optimization: **{bg}**.\n'
+              f'- Selector unique tiles: **{sels}**; only one selector image is resident at a time.\n'
+              f'- Conservative simultaneous project-pattern upper bound: **{worst} tiles / {raw} bytes**.\n'
+              f'- Against the project 44 KiB pattern ceiling: **{free} bytes free** before ResComp duplicate/flip savings.\n'
+              '- Decorative moving-tank overlay: **removed**.\n'
+              '- Lower tank/stat/minimap HUD: **removed**; lower screen is continuous static battlefield.\n'
+              '- Runtime recurring visual update: selector pulse/navigation only.\n'
+              '- Locked reference PNGs are not embedded or modified.\n',
+              encoding='utf-8')
+          if raw > ceiling:
+              raise SystemExit(f'R2 project pattern budget exceeded: {raw}>{ceiling}')
+          print('R2 resource budget PASS', bg, sels, raw, free)
+          PY
 
       - name: Verify R2 source and locked-art contract
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'Modern Tanks R2' sgdk/src/main.c
-          grep -q 'Visual Rework 1' sgdk/src/main.c
+          grep -q 'Focused Menu Rework' sgdk/src/main.c
           grep -q 'r2_menu_bg' sgdk/src/main.c
           grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
           grep -q 'STATE_TEST_BATTLE' sgdk/src/main.c
@@ -61,8 +96,11 @@ jobs:
           grep -q 'VDP_setEnable(FALSE)' sgdk/src/main.c
           test -f sgdk/res/resources.res
           grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
+          ! grep -q 'r2_anim_tank' sgdk/res/resources.res
+          ! grep -q 'r2_anim_tank' sgdk/src/main.c
           ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
           ! find sgdk -type f -iname '*MAIN_MENU_REFERENCE*' -print -quit | grep -q .
+          ! find sgdk -type f -iname '*TANKS_DETAILED_REFERENCE*' -print -quit | grep -q .
           ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
 
       - name: Pin exact container image for this run
@@ -131,33 +169,31 @@ jobs:
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
           # Modern Tanks R2 — CI Build Report
 
-          - Stage: R2 Main Menu Visual Target — Visual Rework 1
+          - Stage: R2 Main Menu Visual Target — Focused Menu / Tank Reference Rework
           - Commit: ${GITHUB_SHA}
           - Toolchain: SGDK 2.11 via ${SGDK_IMAGE}
           - ROM size: ${ROM_SIZE} bytes
           - ROM SHA-256: ${ROM_SHA}
           - Reproducibility: two clean builds compared byte-for-byte before audit
           - Input contract: standard 3-button controller
-          - Included: accepted R1 core, native 320x224 R2 pixel art, winding river battlefield, forest clusters, brick/steel barriers, bridges, craters, multiple tanks, shells/explosions/smoke, dimensional metallic logo, four canonical Russian menu items, detailed T-1..T-4 strip, segmented stats, minimap, animated selector, scripted moving menu tank
-          - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; upgrades remain inside GARAGE and missions remain under PLAY per frozen design
-          - Intentionally absent: R3 battle renderer/HUD, R4 combat tank art, world map streaming, gameplay/AI, SRAM, audio
+          - Included: accepted R1 core, native 320x224 menu, full-screen battlefield, hand-drawn reference-driven T-1/T-2/T-3/T-4 silhouettes, metallic logo, four canonical Russian menu items, animated selector pulse
+          - Removed by owner direction: lower tank-class/stat/minimap strip and decorative moving menu tank
+          - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; tank/class selection belongs to GARAGE; map/mission context belongs outside the main menu
+          - Intentionally absent: R3 battle renderer/HUD, R4 final combat tank sprite set, world map streaming, gameplay/AI, SRAM, audio
           - Locked reference PNG embedded/modified: NO
           - Granada assets/code embedded: NO
-          - Project-owned menu pattern conservative upper bound: 658 unique 8x8 tiles / 21,056 bytes before ResComp duplicate/flip savings
-          - Conservative 44 KiB project pattern ceiling free: 24,000 bytes minimum
-          - Project VDP sprite payload: 0; scripted tank uses Plane A tiles
-          - Worst recurring update: moving 2x2 tile overlay every 8 logic ticks; selector redraw only on navigation
+          - Project VDP sprite payload in menu: 0
+          - Runtime recurring visual update: selector pulse/navigation only
           - Menu bank cleanup: inherited accepted R1 blanked teardown with plane/CRAM/sprite residue checks
           - Emulator status: CI PASS does not replace MD Emu Games Gen target visual acceptance
           - Gate status: TARGET PENDING
           REPORT
-          cp sgdk/res/R2_RESOURCE_BUDGET.md sgdk/out/R2_RESOURCE_BUDGET.md
 
       - name: Publish R2 ROM artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Main_Menu_Visual_Rework_1
+          name: Modern_Tanks_R2_Focused_Menu_Tank_Rework
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
