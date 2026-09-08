@@ -1,0 +1,1 @@
+R2 MAX DETAIL assets are generated from project-owned native 320x224 pixel-art sources. Locked reference PNGs are not embedded, modified, rescaled, or copied into the ROM. SG800 is treated as an MD-emulator host; the ROM remains a real Mega Drive/Genesis SGDK build.
