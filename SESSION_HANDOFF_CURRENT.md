@@ -37,65 +37,98 @@ CI R0:
 - two clean SGDK 2.11 builds: byte-identical;
 - independent ROM verifier: PASS.
 
-### R1 scope, который теперь считается доказанным
+Target acceptance:
 
-- BOOT;
-- TITLE;
-- MAIN_MENU shell;
-- TEST_BATTLE shell;
-- GARAGE shell;
-- state transitions;
-- 3-button input abstraction;
-- NTSC/PAL timing;
-- debug/error layer;
-- state enter/leave hooks;
-- ResourceBank load/unload API;
-- cleanup BG_A/B, WINDOW, scroll, sprites и CRAM;
-- 100-transition soak.
-
-### История palette self-check
-
-Исходный R1 и FIX1 функционально работали, но target screenshots показывали ложный `PALETTE_RESIDUE` при state teardown. FIX2 перевёл teardown/setup в короткую blanked VDP transaction, после чего defect исчез.
-
-### Финальный target-test FIX2
-
-Владелец проекта проверил FIX2 в MD Emu Games Gen на Android и предоставил screenshots.
-
-Подтверждено:
-
-- ручные переходы MENU / TEST_BATTLE / GARAGE работают;
-- `ERR:00` после ручных переходов;
+- manual MENU / TEST_BATTLE / GARAGE transitions PASS;
+- `ERR:00`;
 - `SOAK: PASS 100/100`;
-- после soak `STATE: MAIN_MENU`;
-- после soak `BANK: MENU`;
-- после soak `ERR:00`;
-- финальный screenshot показывает `TRANS:114`, то есть после автоматических 100 переходов ручная работа продолжалась без накопления ошибок.
-
-`LAST ERROR: R1_ITEM_NOT_IMPLEMENTED` при `ERR:00` не является runtime error: это информационная строка после нажатия на намеренно заблокированный R1-пункт `STATISTICS` или `OPTIONS`; `errorCount` она не увеличивает.
+- final `STATE: MAIN_MENU`, `BANK: MENU`;
+- user continued to `TRANS:114` with `ERR:00`.
 
 Полный результат: `tests/r1/R1_ACCEPTANCE_RESULT.md`.
 
 ## 4. Текущий milestone — R2 MAIN MENU VISUAL TARGET
 
-Статус: **UNLOCKED / NOT STARTED**.
+Статус: **BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
 
-R2 разрешён только потому, что R1 теперь ACCEPTED/CLOSED. В acceptance commit R2 код/графика не добавлялись.
+R2 реализован поверх принятого R1 core. R3 не начат.
 
-Перед началом R2 обязательно перечитать:
+### R2 visual scope
 
-- `plan/REBUILD_MASTER_PLAN.md`, раздел R2;
-- `plan/ACCEPTANCE_GATES.md`;
-- `design/GAME_DESIGN_FROZEN.md`;
-- `references/MAIN_MENU_REFERENCE.png` как locked visual target;
-- technical документы по Mega Drive/VRAM/Granada.
+В текущем ROM есть:
 
-R2 должен делать визуальное меню Modern Tanks максимально близким по композиции к `MAIN_MENU_REFERENCE.png`, но не менять game-design/navigation semantics. Granada остаётся только техническим образцом.
+- native-resolution 320×224 menu art;
+- крупный MODERN TANKS logo;
+- battlefield background;
+- steel-frame visual language;
+- канонические пункты `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
+- tank-class strip;
+- stats preview;
+- mini-map preview;
+- animated/pulsing selector;
+- subtle scripted moving tank на battlefield;
+- переход ИГРАТЬ → TEST_BATTLE shell;
+- переход ГАРАЖ → GARAGE shell;
+- возврат B;
+- меню unload/reload использует принятую R1 blanked VDP transaction и CRAM/sprite self-check.
 
-## 5. Что не трогать
+STATISTICS и OPTIONS в R2 остаются visual-only: полноценные meta-state относятся к более поздней стадии. Это не меняет frozen design.
 
-- три PNG reference — LOCKED;
-- `design/GAME_DESIGN_FROZEN.md` — не менять смысл игры;
-- Granada — только technical reference;
-- старый DEV — запрещён.
+## 5. R2 art pipeline
 
-Следующая работа должна начинаться строго с анализа требований R2, без перехода к R3 до отдельного acceptance R2.
+Locked `references/MAIN_MENU_REFERENCE.png` не изменён, не перекодирован и не встроен в ROM.
+
+Проектный R2 art создаётся детерминированно скриптом:
+
+`sgdk/tools/generate_r2_art.py`
+
+Скрипт рисует меню непосредственно в native Mega Drive resolution и создаёт indexed PNG для SGDK ResComp. Это также исключает ненадёжную бинарную передачу PNG через connector.
+
+Granada assets/code в R2 отсутствуют. Старая DEV-линия отсутствует.
+
+## 6. R2 CI — PASS
+
+Финальный build:
+
+- build commit: `49ebfa6087cf8c39c313fa305cd48892509f0948`;
+- GitHub Actions run: `34180963691`;
+- job `build-r2`: SUCCESS;
+- generated-art validation: PASS;
+- source/locked-art contract: PASS;
+- SGDK 2.11 build A: PASS;
+- SGDK 2.11 build B: PASS;
+- byte-for-byte reproducibility: PASS;
+- independent ROM audit: PASS;
+- ROM size: `131072` bytes;
+- ROM SHA-256: `dda9c3f62769371f9888b171a1ac2ac6374b886dead551db9fd3de657cbb539f`;
+- header checksum: `0x031D`;
+- required checksum: `0x031D`;
+- SGDK full-ROM XOR-fold: `0x0000`.
+
+Resource budget:
+
+- conservative project-owned menu pattern worst case: 444 tiles / 14,208 bytes;
+- conservative 44 KiB project pattern ceiling free: 30,848 bytes;
+- project VDP sprite payload: 0; moving tank uses Plane A tiles.
+
+Подробности: `tests/r2/R2_BUILD_STATUS.md` и `sgdk/res/R2_RESOURCE_BUDGET.md`.
+
+## 7. Следующий обязательный шаг
+
+Только target-проверка R2 ROM в MD Emu Games Gen по `tests/r2/R2_ACCEPTANCE_CHECKLIST.md`.
+
+Проверить:
+
+- visual composition относительно `references/MAIN_MENU_REFERENCE.png`;
+- selector Up/Down;
+- selector pulse и moving background tank;
+- ИГРАТЬ → TEST_BATTLE → B → MENU;
+- ГАРАЖ → GARAGE → B → MENU;
+- после нескольких переходов `ERR:00`;
+- отсутствие VRAM/palette/sprite corruption.
+
+## 8. Строгий запрет
+
+**R2 пока НЕ ACCEPTED. R3 НЕ НАЧИНАТЬ.**
+
+R3 разрешается только после прямого подтверждения владельцем, что R2 принят.
