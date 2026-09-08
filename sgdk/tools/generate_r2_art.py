@@ -19,7 +19,11 @@ assets = {
 }
 
 for out_name, src_name in assets.items():
-    payload = (ART / src_name).read_text(encoding="ascii").strip()
+    payload = (ART / src_name).read_text(encoding="ascii")
+    # MIME/base64 whitespace is legal; remove it before strict validation so
+    # the decoded bytes remain deterministic while GitHub line endings do not matter.
+    payload = "".join(payload.split())
+    print("decode", src_name, "chars", len(payload))
     data = base64.b64decode(payload, validate=True)
     (RES / out_name).write_bytes(data)
 
