@@ -10,12 +10,13 @@
 4. `tests/r0/R0_ACCEPTANCE_RESULT.md`
 5. `tests/r1/R1_BUILD_STATUS.md`
 6. `tests/r1/R1_ACCEPTANCE_CHECKLIST.md`
+7. `tests/r1/R1_TARGET_TEST_2026-09-08.md`
 
 ## Текущая точка
 
 - **R0 Hardware Probe — ACCEPTED / CLOSED (2026-09-08).**
-- **R1 Core / State Machine — BUILD/CI PASS / TARGET ACCEPTANCE PENDING.**
-- **R2 — BLOCKED до прямого пользовательского PASS R1.**
+- **R1 Core / State Machine — FUNCTIONAL TARGET PASS / CLEANUP RETEST PENDING.**
+- **R2 — BLOCKED до чистого пользовательского PASS R1.**
 
 ## Неизменяемые требования
 
@@ -30,21 +31,29 @@
 
 Пользователь лично проверил R0 в MD Emu Games Gen на Android: стабильный запуск и изображение, R0A PASS, R0B PASS, D-Pad и A/B/C/START PASS. X/Y/Z не являются требованием, потому что R0 использует 3-button controller path.
 
-## R1 — собран
+## R1 — первый target-test
 
-Scope R1 ограничен core-shell: BOOT, TITLE, MAIN_MENU, TEST_BATTLE, GARAGE, 3-button input abstraction, PAL/NTSC timing, debug/error layer, enter/leave hooks, resource bank API и 100-transition soak.
+Пользователь подтвердил, что R1 визуально и по переходам работает. Но screenshots показали `LAST ERROR: PALETTE_RESIDUE` и рост ERR вместе с TRANS, поэтому формальный gate не закрыт.
 
-CI:
+Исправлен порядок CRAM cleanup/readback:
 
-- run `34176727527` — SUCCESS;
-- commit `d348e0518bfe74d47da6db705313e4a26c0fc891`;
+- fix commit `16ea3ccad96b51e0514e88076ee6c4f00b752098`;
+- GitHub Actions run `34177478564` — SUCCESS;
 - ROM 131072 bytes;
-- SHA-256 `4fdc8d3d8ef9f723caf228b61f183b1fea927bee93727028f6e0a414cf6a726a`;
+- SHA-256 `0798b55ea287dc991a896ae67c94d1afa8640a50f85366ab765809ff316cc713`;
+- header checksum `0x8B8E`;
 - verifier PASS;
 - две clean SGDK builds идентичны byte-for-byte.
 
 ## Следующее действие
 
-Только проверить R1 ROM в MD Emu Games Gen по `tests/r1/R1_ACCEPTANCE_CHECKLIST.md`. В MAIN MENU нажать C и дождаться `SOAK: PASS 100/100`, `ERR: 00`, `STATE: MAIN_MENU`, `BANK: MENU`, затем снова проверить ручной input.
+Только повторно проверить FIX1 ROM в MD Emu Games Gen. До запуска soak обычные переходы не должны увеличивать ERR. Затем в MAIN MENU нажать C и дождаться:
 
-**Не начинать R2 до прямого подтверждения пользователя, что R1 принят.**
+- `SOAK: PASS 100/100`;
+- `ERR:00`;
+- `STATE: MAIN_MENU`;
+- `BANK: MENU`.
+
+После soak снова проверить D-Pad/A/B/C/START.
+
+**Не начинать R2 до прямого подтверждения чистого R1 PASS.**
