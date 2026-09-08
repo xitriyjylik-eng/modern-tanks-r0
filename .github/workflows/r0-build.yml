@@ -1,4 +1,4 @@
-name: R0 SGDK hardware probe
+name: R1 Core/Menu SGDK CI
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       - '.github/workflows/r0-build.yml'
 
 jobs:
-  build-r0:
+  build-r1:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,6 +20,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify R1 source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'STATE_BOOT' sgdk/src/main.c
+          grep -q 'STATE_TITLE' sgdk/src/main.c
+          grep -q 'STATE_MAIN_MENU' sgdk/src/main.c
+          grep -q 'STATE_TEST_BATTLE' sgdk/src/main.c
+          grep -q 'STATE_GARAGE' sgdk/src/main.c
+          grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
+          grep -q '#define R1_SOAK_TRANSITIONS 100' sgdk/src/main.c
+          ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
+
       - name: Pin exact container image for this run
         shell: bash
         run: |
@@ -30,25 +43,25 @@ jobs:
           test -n "$IMAGE_ID"
           test -n "$IMAGE_DIGEST"
           mkdir -p sgdk/out
-          printf '%s\n' "$IMAGE_ID" > sgdk/out/R0_TOOLCHAIN_IMAGE_ID.txt
-          printf '%s\n' "$IMAGE_DIGEST" > sgdk/out/R0_TOOLCHAIN_IMAGE_DIGEST.txt
+          printf '%s\n' "$IMAGE_ID" > sgdk/out/R1_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$IMAGE_DIGEST" > sgdk/out/R1_TOOLCHAIN_IMAGE_DIGEST.txt
           printf 'SGDK_IMAGE_ID=%s\n' "$IMAGE_ID" >> "$GITHUB_ENV"
 
       - name: Prepare two clean writable build trees
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/sgdk-r0-a /tmp/sgdk-r0-b
-          cp -a sgdk /tmp/sgdk-r0-a
-          cp -a sgdk /tmp/sgdk-r0-b
-          chmod -R a+rwX /tmp/sgdk-r0-a /tmp/sgdk-r0-b
+          rm -rf /tmp/sgdk-r1-a /tmp/sgdk-r1-b
+          cp -a sgdk /tmp/sgdk-r1-a
+          cp -a sgdk /tmp/sgdk-r1-b
+          chmod -R a+rwX /tmp/sgdk-r1-a /tmp/sgdk-r1-b
 
       - name: Build A with pinned SGDK 2.11 image ID
         shell: bash
         run: |
           set -euo pipefail
           docker run --rm \
-            -v /tmp/sgdk-r0-a:/m68k \
+            -v /tmp/sgdk-r1-a:/m68k \
             "$SGDK_IMAGE_ID"
 
       - name: Build B with the exact same image ID
@@ -56,34 +69,67 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
-            -v /tmp/sgdk-r0-b:/m68k \
+            -v /tmp/sgdk-r1-b:/m68k \
             "$SGDK_IMAGE_ID"
 
       - name: Prove reproducibility
         shell: bash
         run: |
           set -euo pipefail
-          test -f /tmp/sgdk-r0-a/out/rom.bin
-          test -f /tmp/sgdk-r0-b/out/rom.bin
-          cmp /tmp/sgdk-r0-a/out/rom.bin /tmp/sgdk-r0-b/out/rom.bin
-          cp /tmp/sgdk-r0-a/out/rom.bin sgdk/out/rom.bin
-          sha256sum sgdk/out/rom.bin | tee sgdk/out/R0_SHA256.txt
+          test -f /tmp/sgdk-r1-a/out/rom.bin
+          test -f /tmp/sgdk-r1-b/out/rom.bin
+          cmp /tmp/sgdk-r1-a/out/rom.bin /tmp/sgdk-r1-b/out/rom.bin
+          cp /tmp/sgdk-r1-a/out/rom.bin sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R1_SHA256.txt
 
       - name: Independent ROM header/checksum audit
         shell: bash
         run: |
           set -euo pipefail
-          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R0_ROM_AUDIT.json
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R1_ROM_AUDIT.json
 
-      - name: Publish R0 ROM artifact
+      - name: Build R1 stage report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          ROM_SHA="NOT_BUILT"
+          ROM_SIZE="NOT_BUILT"
+          if [ -f sgdk/out/rom.bin ]; then
+            ROM_SHA="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
+            ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"
+          fi
+          cat > sgdk/out/R1_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R1 — CI Build Report
+
+          - Stage: R1 Core / State Machine
+          - Commit: ${GITHUB_SHA}
+          - Toolchain: SGDK 2.11 via ${SGDK_IMAGE}
+          - ROM size: ${ROM_SIZE} bytes
+          - ROM SHA-256: ${ROM_SHA}
+          - Reproducibility: two clean builds compared byte-for-byte before audit
+          - Input contract: 3-button first
+          - Included: BOOT, TITLE, MAIN_MENU shell, TEST_BATTLE shell, GARAGE shell, state hooks, bank load/unload, PAL/NTSC timing, debug/error layer, 100-transition soak mode
+          - Intentionally absent: R2 visual menu art, gameplay, map renderer, tank art, AI, SRAM, audio
+          - Project-owned rescomp tile payload in R1: 0 bytes
+          - Project-owned VDP sprite payload in R1: 0 bytes
+          - Runtime cleanup: planes/CRAM/VDP sprites reset on every bank unload; palette/sprite residue self-checks are built into the ROM
+          - DMA worst case: no per-frame gameplay DMA workload in R1; state transition plane clears are transition-only
+          - Emulator status: CI build only; MD Emu Games Gen target test pending user
+          - Gate status: NOT ACCEPTED until user confirms R1
+          REPORT
+
+      - name: Publish R1 ROM artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R0_Hardware_Probe
+          name: Modern_Tanks_R1_Core_Menu
           path: |
             sgdk/out/rom.bin
-            sgdk/out/R0_SHA256.txt
-            sgdk/out/R0_ROM_AUDIT.json
-            sgdk/out/R0_TOOLCHAIN_IMAGE_ID.txt
-            sgdk/out/R0_TOOLCHAIN_IMAGE_DIGEST.txt
-          if-no-files-found: error
+            sgdk/out/R1_SHA256.txt
+            sgdk/out/R1_ROM_AUDIT.json
+            sgdk/out/R1_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R1_TOOLCHAIN_IMAGE_DIGEST.txt
+            sgdk/out/R1_BUILD_REPORT.md
+          if-no-files-found: warn
