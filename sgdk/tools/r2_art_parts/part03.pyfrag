@@ -34,60 +34,128 @@ def crater(cx,cy,r=7):
 for p in [(39,66),(73,119),(246,91),(294,57),(20,157),(273,151)]:
     crater(*p)
 
-# compact detailed top-down battlefield tanks.
-# Art direction follows TANKS_DETAILED_REFERENCE: visible tracks, shaped hull,
-# turret ring, hatch/bolts and a real gun barrel rather than a rectangle icon.
-def btank(cx,cy,body,hi,dir=3,variant=0):
-    def P(dx,dy):
-        if dir==3: return (cx+dx,cy+dy)       # up
-        if dir==1: return (cx-dx,cy-dy)       # down
-        if dir==0: return (cx-dy,cy+dx)       # right
-        return (cx+dy,cy-dx)                  # left
-    w=[5,6,7,6][variant&3]
-    outer=w+3
-    dark=I(0,1); track=I(0,0); metal=I(0,11); shine=I(0,15)
-    # separated caterpillar tracks
-    d.polygon([P(-outer,-7),P(-w,-7),P(-w,7),P(-outer,7)],fill=track)
-    d.polygon([P(w,-7),P(outer,-7),P(outer,7),P(w,7)],fill=track)
-    for yy in (-5,-1,3,6):
-        d.line([P(-outer+1,yy),P(-w-1,yy)],fill=metal)
-        d.line([P(w+1,yy),P(outer-1,yy)],fill=metal)
-    # tapered armoured hull
-    hull=[(-w+1,-6),(w-1,-6),(w,-3),(w,5),(w-2,7),(-w+2,7),(-w,5),(-w,-3)]
-    d.polygon([P(x,y) for x,y in hull],fill=body)
-    d.line([P(-w+2,-5),P(w-2,-5)],fill=hi)
-    d.line([P(-w+1,-3),P(-w+1,4)],fill=hi)
-    # class-specific side armour / engine deck
-    if variant==1:
-        d.polygon([P(-w,0),P(-w+2,-2),P(-w+2,5),P(-w,4)],fill=metal)
-        d.polygon([P(w,0),P(w-2,-2),P(w-2,5),P(w,4)],fill=metal)
-    elif variant==2:
-        d.rectangle([min(P(-w+1,3)[0],P(w-1,6)[0]),min(P(-w+1,3)[1],P(w-1,6)[1]),max(P(-w+1,3)[0],P(w-1,6)[0]),max(P(-w+1,3)[1],P(w-1,6)[1])],fill=metal)
-    elif variant==3:
-        d.polygon([P(-w,-2),P(-2,-5),P(-2,4),P(-w+1,5)],fill=hi)
-        d.polygon([P(w,-2),P(2,-5),P(2,4),P(w-1,5)],fill=hi)
-    # turret ring and turret
-    d.ellipse([cx-4,cy-4,cx+4,cy+4],fill=dark)
-    d.ellipse([cx-3,cy-3,cx+3,cy+3],fill=body)
-    d.line([P(-2,-2),P(2,-2)],fill=hi)
-    d.rectangle([cx-1,cy-1,cx+1,cy+1],fill=metal)
-    d.point((cx,cy),fill=shine)
-    # mantlet + long gun
-    d.line([P(0,-3),P(0,-12 if variant!=2 else -10)],fill=hi,width=2 if variant!=2 else 3)
-    d.point(P(0,-12 if variant!=2 else -10),fill=shine)
-    # tiny headlights / bolts
-    for px,py in [(-w+2,-4),(w-2,-4),(-w+2,4),(w-2,4)]:
-        d.point(P(px,py),fill=shine)
+# Reference-driven tank renderer.
+# These are hand-drawn native pixel models based on the locked
+# TANKS_DETAILED_REFERENCE.png art direction, not geometric icon stand-ins.
+def _tp(cx,cy,x,y,rot):
+    if rot==0: return (cx+x,cy+y)
+    if rot==1: return (cx-y,cy+x)
+    if rot==2: return (cx-x,cy-y)
+    return (cx+y,cy-x)
 
+def _tpoly(cx,cy,pts,rot,fill=None,outline=None):
+    d.polygon([_tp(cx,cy,x,y,rot) for x,y in pts],fill=fill,outline=outline)
+
+def _tline(cx,cy,pts,rot,fill,width=1):
+    d.line([_tp(cx,cy,x,y,rot) for x,y in pts],fill=fill,width=width)
+
+def _trect(cx,cy,x0,y0,x1,y1,rot,fill=None,outline=None):
+    _tpoly(cx,cy,[(x0,y0),(x1,y0),(x1,y1),(x0,y1)],rot,fill,outline)
+
+def _tellipse(cx,cy,x0,y0,x1,y1,rot,fill=None,outline=None):
+    if rot&1:
+        box=[cx-y1,cy+x0,cx-y0,cy+x1]
+    else:
+        box=[cx+x0,cy+y0,cx+x1,cy+y1]
+    d.ellipse(box,fill=fill,outline=outline)
+
+def ref_tank(cx,cy,kind=0,rot=0,pal=0):
+    # T-1 scout, T-2 ranger, T-3 fortress, T-4 assault.
+    if pal==0:
+        colors=[(4,5,3),(9,11,8),(7,15,6),(12,14,13)]
+        metal_idx=15; tread_idx=6
+    else:
+        colors=[(10,11,6),(12,13,5),(15,9,7),(14,9,8)]
+        metal_idx=9; tread_idx=5
+    b,h,s=colors[kind]
+    body=I(pal,b); hi=I(pal,h); shade=I(pal,s)
+    dark=I(pal,1); track=I(pal,0); tread=I(pal,tread_idx); metal=I(pal,metal_idx)
+
+    dims=[(6,9,10),(8,10,12),(10,11,14),(9,10,13)]
+    w,front,rear=dims[kind]
+    track_w=3 if kind<2 else 4
+
+    # Separate caterpillar assemblies, with tread segmentation.
+    for side in (-1,1):
+        anchor=side*(w+4)
+        if side<0: x0,x1=anchor-track_w+1,anchor
+        else: x0,x1=anchor,anchor+track_w-1
+        _trect(cx,cy,x0,-front,x1,rear,rot,fill=track)
+        for yy in range(-front+1,rear,4):
+            _tline(cx,cy,[(x0,yy),(x1,yy)],rot,tread)
+
+    # Class-specific armoured hull silhouette.
+    if kind==0:
+        hull=[(-w+2,-front),(w-2,-front),(w,-front+4),(w-1,rear-2),(w-4,rear),(-w+4,rear),(-w+1,rear-2),(-w,-front+4)]
+    elif kind==1:
+        hull=[(-w+2,-front),(w-2,-front),(w,-front+3),(w,rear-3),(w-3,rear),(-w+3,rear),(-w,rear-3),(-w,-front+3)]
+    elif kind==2:
+        hull=[(-w+3,-front),(w-3,-front),(w,-front+3),(w,rear-2),(w-2,rear),(-w+2,rear),(-w,rear-2),(-w,-front+3)]
+    else:
+        hull=[(-w+3,-front),(w-3,-front),(w,-front+5),(w-2,rear),(0,rear-2),(-w+2,rear),(-w,-front+5)]
+    _tpoly(cx,cy,hull,rot,fill=body)
+    _tline(cx,cy,[(-w+3,-front+1),(w-3,-front+1)],rot,hi)
+    _tline(cx,cy,[(-w+1,-front+4),(-w+2,rear-3)],rot,shade)
+    _tline(cx,cy,[(w-1,-front+4),(w-2,rear-3)],rot,dark)
+
+    # Rear deck and recognisable class modules.
+    if kind==0:
+        _trect(cx,cy,-4,5,4,9,rot,fill=shade)
+        for xx in (-3,0,3): _tline(cx,cy,[(xx,6),(xx,8)],rot,hi)
+    elif kind==1:
+        _trect(cx,cy,-5,6,5,10,rot,fill=shade)
+        _tline(cx,cy,[(-4,7),(4,7)],rot,hi)
+        _trect(cx,cy,-w,0,-w+3,7,rot,fill=shade)
+        _trect(cx,cy,w-3,0,w,7,rot,fill=shade)
+    elif kind==2:
+        _trect(cx,cy,-7,5,7,11,rot,fill=shade)
+        for xx in (-5,-2,2,5): _tline(cx,cy,[(xx,6),(xx,10)],rot,dark)
+        _trect(cx,cy,-w,-4,-w+3,7,rot,fill=shade)
+        _trect(cx,cy,w-3,-4,w,7,rot,fill=shade)
+    else:
+        _tpoly(cx,cy,[(-w,-3),(-w+4,-7),(-4,2),(-w+2,7)],rot,fill=shade)
+        _tpoly(cx,cy,[(w,-3),(w-4,-7),(4,2),(w-2,7)],rot,fill=shade)
+        _trect(cx,cy,-5,6,5,10,rot,fill=dark)
+
+    # Turret ring and shaped turret armour.
+    tr=[4,5,6,5][kind]
+    _tellipse(cx,cy,-tr-1,-tr-1,tr+1,tr+1,rot,fill=dark)
+    if kind==2:
+        turret=[(-tr+1,-tr),(tr-1,-tr),(tr+1,-2),(tr,4),(3,tr),(-3,tr),(-tr,4),(-tr-1,-2)]
+    elif kind==3:
+        turret=[(-tr+1,-tr),(tr-1,-tr),(tr+1,-1),(tr-1,tr),(-tr+1,tr),(-tr-1,-1)]
+    else:
+        turret=[(-tr+1,-tr),(tr-1,-tr),(tr,-2),(tr-1,tr),(-tr+1,tr),(-tr,-2)]
+    _tpoly(cx,cy,turret,rot,fill=body)
+    _tline(cx,cy,[(-tr+2,-tr+1),(tr-2,-tr+1)],rot,hi)
+
+    # Mantlet + long gun, matching the vertical demonstrator silhouettes.
+    gunlen=[13,14,12,15][kind]
+    gunw=1 if kind<2 else 2
+    _trect(cx,cy,-gunw,-tr-3,gunw,-tr+1,rot,fill=shade)
+    _trect(cx,cy,-gunw,-tr-gunlen,gunw,-tr-3,rot,fill=hi)
+    _tline(cx,cy,[(-gunw,-tr-gunlen),(gunw,-tr-gunlen)],rot,dark)
+
+    # Cupola, hatch, bolts and front lamps.
+    _tellipse(cx,cy,-2,0,2,4,rot,fill=shade)
+    _tline(cx,cy,[(-1,1),(1,1)],rot,metal)
+    for px,py in [(-tr+1,1),(tr-1,1),(-2,-2),(2,-2)]:
+        qx,qy=_tp(cx,cy,px,py,rot)
+        if 0<=qx<W and 0<=qy<H: d.point((qx,qy),fill=metal)
+    for px in (-w+3,w-3):
+        qx,qy=_tp(cx,cy,px,-front+4,rot)
+        if 0<=qx<W and 0<=qy<H: d.point((qx,qy),fill=metal)
+
+# Static battlefield machines; no animated decorative tank in R2.
 for args in [
-    (22,86,I(0,4),I(0,5),0,0),
-    (72,18,I(0,12),I(0,14),1,1),
-    (284,95,I(0,14),I(0,15),2,3),
-    (53,154,I(0,5),I(0,15),3,2),
-    (267,40,I(0,3),I(0,5),2,1),
-    (308,142,I(0,12),I(0,14),3,3),
+    (25,88,0,1,0),
+    (73,24,1,2,0),
+    (281,96,2,3,0),
+    (54,151,3,0,0),
+    (268,42,0,3,0),
+    (307,143,3,0,0),
 ]:
-    btank(*args)
+    ref_tank(*args)
 
 # projectiles, muzzle flashes and smoke
 def flash(x,y):
@@ -95,11 +163,10 @@ def flash(x,y):
         d.rectangle([x-r,y-r,x+r,y+r],fill=c)
     d.line([x-10,y,x+10,y],fill=I(0,15))
     d.line([x,y-8,x,y+8],fill=I(0,14))
-for x,y in [(37,86),(269,95),(72,34),(308,126)]:
+for x,y in [(43,88),(260,96),(73,43),(307,121)]:
     flash(x,y)
-for x1,y1,x2,y2 in [(38,86,63,86),(270,95,248,95),(72,35,72,50),(308,125,308,110)]:
+for x1,y1,x2,y2 in [(43,88,66,88),(260,96,239,96),(73,43,73,55),(307,121,307,108)]:
     d.line([x1,y1,x2,y2],fill=I(0,15),width=1)
     d.point(((x1+x2)//2,(y1+y2)//2),fill=I(0,14))
-# smoke
 for cx,cy in [(241,118),(92,143)]:
     for rr,ox,oy,col in [(7,0,0,1),(5,-4,-4,6),(4,4,-6,7),(3,
