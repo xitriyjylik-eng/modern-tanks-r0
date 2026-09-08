@@ -2,103 +2,85 @@
 
 Дата состояния: **2026-09-08**.
 
-## 1. Жёсткие инварианты
+## 1. Инварианты
 
-1. Идею, механику и идентичность Modern Tanks не менять.
-2. `design/GAME_DESIGN_FROZEN.md` — источник истины по игре.
-3. Три PNG в `references/` не изменять, не перекодировать и не заменять.
-4. Granada использовать только как технический образец Mega Drive; не копировать её графику, код, карты, музыку или игровые правила.
-5. Старую DEV-линию, DEV ROM, Python opcode-emitter и старый DEV master-plan не возвращать.
-6. Техническая линия только R0–R12 clean rebuild на SGDK 2.11.
+- Идею Modern Tanks не менять.
+- Три locked PNG reference не изменять/не перекодировать/не заменять.
+- `TANKS_DETAILED_REFERENCE.png` — обязательный art-direction танков.
+- Granada — только технический образец Mega Drive.
+- Старая DEV-линия запрещена.
+- Clean SGDK 2.11 rebuild only.
 
 ## 2. Закрытые этапы
 
-- **R0 Hardware Probe — ACCEPTED / CLOSED.** Target MD Emu Games Gen PASS.
-- **R1 Core / State Machine — ACCEPTED / CLOSED.** FIX2: `ERR:00`, `SOAK: PASS 100/100`, target PASS. Accepted source commit `bc858a619de76a1f5c3112859914ea132e9bf7be`, run `34178302167`.
+- **R0 — ACCEPTED / CLOSED.**
+- **R1 — ACCEPTED / CLOSED.** FIX2 target: `ERR:00`, `SOAK: PASS 100/100`.
 
-## 3. Текущий milestone — R2 MAIN MENU VISUAL TARGET
+## 3. R2 MAIN MENU VISUAL TARGET
 
-Статус: **TANK REFERENCE FIX — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
+Статус: **FOCUSED MENU / TANK REFERENCE REWORK — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
 
-R3 не начат и остаётся запрещён до прямого принятия R2 владельцем.
+R3 не начинать до прямого принятия R2 владельцем.
 
-### История R2
+## 4. Последнее обязательное решение владельца
 
-- Первый R2 candidate был визуально отклонён как слишком упрощённый относительно `references/MAIN_MENU_REFERENCE.png`.
-- Visual Rework / MAX DETAIL повысил общую плотность меню, но владелец указал на критический дефект: танки оставались условными пиктограммами и не соответствовали `references/TANKS_DETAILED_REFERENCE.png`.
-- Эти варианты больше не считать финальными acceptance candidate.
+После проверки предыдущего R2 владелец уточнил компоновку:
 
-Текущий candidate — **R2 TANK REFERENCE FIX**.
+- убрать из главного меню нижний HUD `T-1..T-4 / параметры / карта`;
+- эта панель не несла функции в MAIN MENU и перегружала экран;
+- выбор/характеристики танка относятся к `ГАРАЖ`;
+- карта и миссионная информация относятся к миссионным/игровым экранам;
+- полностью убрать декоративный движущийся танк наверху/на фоне меню.
 
-## 4. Целевая платформа
+Текущий R2 это решение реализует: поле боя продолжается до нижнего края 320×224, а единственная текущая UI-анимация — pulse активного пункта меню.
 
-Modern Tanks остаётся настоящим Mega Drive/Genesis ROM.
+## 5. Танки
 
-- SG800 рассматривается как MD/Mega Drive emulator host для пользовательских ROM;
-- HDMI/4K — вывод/upscaling, а не внутреннее разрешение игры;
-- основной render target — H40 320×224 Mega Drive;
-- тот же `.bin` должен работать на SG800 и в MD/Genesis эмуляторах ПК;
-- обязательный control path — 3-button D-Pad + A/B/C/START.
+Танки больше не строятся как простые прямоугольные пиктограммы.
 
-## 5. Официальный tank art direction
+Вручную нарисован reference-driven native pixel renderer с признаками:
 
-Перед последним исправлением непосредственно перечитан locked `references/TANKS_DETAILED_REFERENCE.png`.
-
-Обязательные признаки:
-
-- вид сверху;
-- отдельные гусеницы;
-- сформированный бронекорпус;
+- строгий top-down;
+- отдельные гусеницы и tread-сегменты;
+- бронекорпус со скосами;
 - башня/погон;
-- маска орудия + полноценный ствол;
-- люки/болты/двигательный отсек/боковые модули в доступном разрешении;
-- каждый класс отличается силуэтом и массой;
-- T-1 зелёный узкий разведчик;
-- T-2 синий универсальный;
-- T-3 широкий тяжёлый «крепость»;
-- T-4 красный угловатый штурмовик.
+- маска орудия и длинный ствол;
+- люк/командирская башенка, болты, моторная палуба/бортовые модули;
+- разные пропорции T-1 разведчика, T-2 рейнджера, T-3 крепости и T-4 штурмовика.
 
-Эти признаки теперь перенесены в:
+В R2 эти машины используются только как статичная часть battlefield art. Финальный gameplay sprite-set относится к последующим этапам и не должен начинаться раньше плана.
 
-- четыре карточки T-1…T-4 нижнего HUD;
-- battlefield tanks на фоне меню;
-- moving 16×16 tank overlay.
+## 6. Текущий CI
 
-Reference PNG не изменялся, не перекодировался и не встраивался как готовая текстура. Графика перерисована вручную в Mega Drive-oriented pixel-art коде.
-
-## 6. Текущий R2 CI — PASS
-
-- source/build commit: `acba3abbf58fd3d1666617d51431c2b5f31eab43`;
-- GitHub Actions run: `34185523022`;
-- job `build-r2`: SUCCESS;
-- generated-art validation: PASS;
-- source/locked-art contract: PASS;
-- SGDK 2.11 build A: PASS;
-- SGDK 2.11 build B: PASS;
-- byte-for-byte reproducibility: PASS;
-- independent ROM audit: PASS;
+- GitHub Actions run: `34186426856` — SUCCESS;
+- tested commit: `831cd8348997cdb13e82cfc8422c6748f3e0e0b1`;
+- SGDK 2.11 build A/B: PASS, byte-identical;
+- ROM audit: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `5b73a0e9a1d7c8efb28541631cf09580790c0496d7b60634db41543b3ad586d9`;
-- header checksum: `0x647E`;
-- required checksum: `0x647E`;
-- full-ROM XOR-fold: `0x0000`.
+- SHA-256: `d4baf97f7884ae0e91be0bc599d11046959fae88407c2db7235dd37726dc47f4`;
+- header checksum: `0x6DF1`;
+- XOR-fold: `0x0000`.
 
-Подробности: `tests/r2/R2_TANK_REFERENCE_FIX.md` и `tests/r2/R2_BUILD_STATUS.md`.
+Resource budget from CI:
 
-## 7. Следующий обязательный шаг
+- 950 unique background tiles;
+- worst selector 24 tiles;
+- conservative simultaneous project patterns: 974 tiles / 31,168 bytes;
+- 13,888 bytes free vs project 44 KiB ceiling;
+- menu VDP sprite payload: 0;
+- moving tank resource removed.
 
-Только target-проверка текущего **R2 TANK REFERENCE FIX ROM**:
+После tested commit также удалён старый неиспользуемый `sgdk/art/r2_anim_tank.png.b64`; это неиспользуемый source artifact и на собранный ROM не влияет.
 
-- сравнить меню с `references/MAIN_MENU_REFERENCE.png`;
-- отдельно сравнить T-1…T-4 и фоновые танки с `references/TANKS_DETAILED_REFERENCE.png`;
-- проверить selector Up/Down;
+## 7. Следующий шаг
+
+Только target-проверка текущего R2 ROM владельцем:
+
+- визуально оценить новое более чистое меню;
+- сравнить статичные танки с `TANKS_DETAILED_REFERENCE.png`;
+- проверить Up/Down selector;
 - ИГРАТЬ → TEST_BATTLE → B → MENU;
 - ГАРАЖ → GARAGE → B → MENU;
-- после переходов `ERR:00`;
-- отсутствие VRAM/palette/sprite corruption.
+- убедиться, что переходы не дают corruption/ERR.
 
-Если внешний вид всё ещё не устраивает — продолжать R2, а не переходить к R3.
-
-## 8. Строгий запрет
-
-**R2 пока НЕ ACCEPTED. R3 НЕ НАЧИНАТЬ.**
+**R2 пока НЕ ACCEPTED. R3 BLOCKED.**
