@@ -22,53 +22,46 @@ def card_tank(x,y,kind):
     hi=[I(3,11),I(3,13),I(3,9),I(3,9)][kind]
     mid=[I(3,6),I(3,7),I(3,8),I(3,8)][kind]
     dark=I(3,2); track=I(3,0); tread=I(3,5); shine=I(3,9)
-    # reference-driven dimensions: scout < ranger < fortress; assault is angular
     widths=[6,8,10,9]; w=widths[kind]
     top=cy-5 if kind<2 else cy-6
     bottom=cy+9 if kind<2 else cy+10
     tw=3 if kind<2 else 4
-    # caterpillar tracks with visible tread segmentation
     d.rectangle([cx-w-3,top,cx-w-3+tw,bottom],fill=track)
     d.rectangle([cx+w+3-tw,top,cx+w+3,bottom],fill=track)
     for yy in range(top+1,bottom,4):
         d.line([cx-w-2,yy,cx-w-3+tw-1,yy],fill=tread)
         d.line([cx+w+3-tw+1,yy,cx+w+2,yy],fill=tread)
-    # armoured hull with narrowed glacis and bevels
     hull=[(cx-w+2,top),(cx+w-2,top),(cx+w,top+3),(cx+w-1,bottom-2),
           (cx+w-4,bottom),(cx-w+4,bottom),(cx-w+1,bottom-2),(cx-w,top+3)]
     d.polygon(hull,fill=body)
     d.line([cx-w+3,top+1,cx+w-3,top+1],fill=hi)
     d.line([cx-w+2,top+3,cx-w+2,bottom-3],fill=mid)
     d.line([cx+w-2,top+3,cx+w-2,bottom-3],fill=dark)
-    # class identity details
-    if kind==0:  # T-1 scout: narrow/light, exposed engine deck
+    if kind==0:
         d.rectangle([cx-4,cy+5,cx+4,cy+8],fill=mid)
         d.line([cx-3,cy+6,cx+3,cy+6],fill=hi)
         d.point((cx-5,cy+5),fill=shine); d.point((cx+5,cy+5),fill=shine)
-    elif kind==1:  # T-2 ranger: balanced side armour
+    elif kind==1:
         d.rectangle([cx-w,cy,cx-w+3,cy+6],fill=mid)
         d.rectangle([cx+w-3,cy,cx+w,cy+6],fill=mid)
         d.rectangle([cx-4,cy+6,cx+4,cy+9],fill=I(3,4))
         d.line([cx-3,cy+7,cx+3,cy+7],fill=hi)
-    elif kind==2:  # T-3 fortress: wide shoulders / thick rear deck
+    elif kind==2:
         d.rectangle([cx-w,cy-2,cx-w+4,cy+6],fill=mid)
         d.rectangle([cx+w-4,cy-2,cx+w,cy+6],fill=mid)
         d.rectangle([cx-6,cy+5,cx+6,cy+9],fill=I(3,6))
         for xx in (cx-4,cx,cx+4): d.point((xx,cy+7),fill=shine)
-    else:  # T-4 assault: angular side armour and aggressive front
+    else:
         d.polygon([(cx-w,cy-2),(cx-w+4,cy-5),(cx-4,cy+3),(cx-w+1,cy+6)],fill=mid)
         d.polygon([(cx+w,cy-2),(cx+w-4,cy-5),(cx+4,cy+3),(cx+w-1,cy+6)],fill=mid)
         d.rectangle([cx-5,cy+6,cx+5,cy+9],fill=I(3,6))
-    # turret ring + turret armour
     tr=[4,5,6,5][kind]
     d.ellipse([cx-tr-1,cy-tr-1,cx+tr+1,cy+tr+1],fill=dark)
     d.ellipse([cx-tr,cy-tr,cx+tr,cy+tr],fill=body)
     d.line([cx-tr+1,cy-tr+1,cx+tr-1,cy-tr+1],fill=hi)
-    # hatch / cupola / turret bolts
     d.rectangle([cx-2,cy-1,cx+2,cy+2],fill=mid)
     d.point((cx,cy),fill=shine)
     d.point((cx-tr+1,cy+1),fill=shine); d.point((cx+tr-1,cy+1),fill=shine)
-    # mantlet and upward gun; T-3 has a visibly thicker heavy cannon
     gunlen=[10,9,8,10][kind]
     d.rectangle([cx-2,cy-tr-2,cx+2,cy-tr],fill=mid)
     if kind==2:
@@ -77,17 +70,18 @@ def card_tank(x,y,kind):
     else:
         d.rectangle([cx-1,cy-tr-gunlen,cx,cy-tr-1],fill=hi)
         d.point((cx-1,cy-tr-gunlen),fill=shine)
-    # front lights and armour fasteners
     d.point((cx-w+3,top+3),fill=shine); d.point((cx+w-3,top+3),fill=shine)
     ptext(x+9,y+29,f"T-{kind+1}",I(3,15 if kind==0 else 8),1,1)
 
 for i,x in enumerate(card_x):
     card_tank(x,178,i)
 
-# stats bars
 stats=[("ОГН",4),("БРН",3),("СКР",5),("ДАЛ",3)]
 for j,(name,val) in enumerate(stats):
     y=184+j*8
     ptext(181,y,name,I(3,8),1,1)
     d.rectangle([199,y+1,235,y+6],fill=I(3,2),outline=I(3,5))
     for k in range(5):
+        x=201+k*7
+        col=I(3,11 if k<val else 3)
+        d.rectangle([x,y+2,x+5,y+5],fill=col)
