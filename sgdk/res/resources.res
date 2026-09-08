@@ -9,6 +9,10 @@ IMAGE r2_river_4 "r2_river_4.png" FAST ALL
 IMAGE r2_river_5 "r2_river_5.png" FAST ALL
 IMAGE r2_river_6 "r2_river_6.png" FAST ALL
 IMAGE r2_river_7 "r2_river_7.png" FAST ALL
+IMAGE r2_river_8 "r2_river_8.png" FAST ALL
+IMAGE r2_river_9 "r2_river_9.png" FAST ALL
+IMAGE r2_river_10 "r2_river_10.png" FAST ALL
+IMAGE r2_river_11 "r2_river_11.png" FAST ALL
 IMAGE r2_flag_right_0 "r2_flag_right_0.png" FAST ALL
 IMAGE r2_flag_right_1 "r2_flag_right_1.png" FAST ALL
 IMAGE r2_flag_right_2 "r2_flag_right_2.png" FAST ALL
@@ -17,6 +21,10 @@ IMAGE r2_flag_right_4 "r2_flag_right_4.png" FAST ALL
 IMAGE r2_flag_right_5 "r2_flag_right_5.png" FAST ALL
 IMAGE r2_flag_right_6 "r2_flag_right_6.png" FAST ALL
 IMAGE r2_flag_right_7 "r2_flag_right_7.png" FAST ALL
+IMAGE r2_flag_right_8 "r2_flag_right_8.png" FAST ALL
+IMAGE r2_flag_right_9 "r2_flag_right_9.png" FAST ALL
+IMAGE r2_flag_right_10 "r2_flag_right_10.png" FAST ALL
+IMAGE r2_flag_right_11 "r2_flag_right_11.png" FAST ALL
 IMAGE r2_fire_top_0 "r2_fire_top_0.png" FAST ALL
 IMAGE r2_fire_top_1 "r2_fire_top_1.png" FAST ALL
 IMAGE r2_fire_top_2 "r2_fire_top_2.png" FAST ALL
@@ -33,3 +41,15 @@ IMAGE r2_fire_bottom_4 "r2_fire_bottom_4.png" FAST ALL
 IMAGE r2_fire_bottom_5 "r2_fire_bottom_5.png" FAST ALL
 IMAGE r2_fire_bottom_6 "r2_fire_bottom_6.png" FAST ALL
 IMAGE r2_fire_bottom_7 "r2_fire_bottom_7.png" FAST ALL
+IMAGE r2_trees_0 "r2_trees_0.png" FAST ALL
+IMAGE r2_trees_1 "r2_trees_1.png" FAST ALL
+IMAGE r2_trees_2 "r2_trees_2.png" FAST ALL
+IMAGE r2_trees_3 "r2_trees_3.png" FAST ALL
+IMAGE r2_trees_4 "r2_trees_4.png" FAST ALL
+IMAGE r2_trees_5 "r2_trees_5.png" FAST ALL
+IMAGE r2_trees_6 "r2_trees_6.png" FAST ALL
+IMAGE r2_trees_7 "r2_trees_7.png" FAST ALL
+IMAGE r2_trees_8 "r2_trees_8.png" FAST ALL
+IMAGE r2_trees_9 "r2_trees_9.png" FAST ALL
+IMAGE r2_trees_10 "r2_trees_10.png" FAST ALL
+IMAGE r2_trees_11 "r2_trees_11.png" FAST ALL
