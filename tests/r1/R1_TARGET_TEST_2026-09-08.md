@@ -1,68 +1,99 @@
-# Modern Tanks R1 — target test 2026-09-08
+# Modern Tanks R1 — target tests 2026-09-08
 
 ## Emulator
 
 MD Emu Games Gen on Android.
 
-## User-observed functional result
+## Functional result
 
-User reported that R1 works correctly and supplied screenshots of TEST_BATTLE and GARAGE shells.
+Пользователь дважды подтвердил, что R1 функционально работает:
 
-Confirmed visually from the screenshots:
+- TEST_BATTLE открывается и отображается;
+- GARAGE открывается и отображается;
+- MAIN_MENU ↔ TEST_BATTLE/GARAGE переходы работают;
+- возврат B работает;
+- видимого crash/VRAM corruption на предоставленных кадрах нет;
+- video/debug layer показывает 60 Hz.
 
-- TEST_BATTLE state is entered and rendered;
-- GARAGE state is entered and rendered;
-- state/bank switching is functioning;
-- return-to-menu path is available;
-- video reports 60 Hz;
-- no visible crash/corruption in the supplied frames.
+То есть state machine, input path и bank switching функционально работают.
 
-## Gate defect found in screenshots
+## Target test 1 — исходный R1
 
-The debug layer showed:
+На screenshots:
 
 - TEST_BATTLE: `TRANS:003 ERR:03`, `LAST ERROR: PALETTE_RESIDUE`;
 - GARAGE: `TRANS:005 ERR:05`, `LAST ERROR: PALETTE_RESIDUE`.
 
-Therefore R1 was **not accepted** despite the positive functional result. The R1 gate requires zero palette residue and `ERR:00`.
+R1 не был принят, потому что gate требует отсутствие palette residue и `ERR:00`.
 
-## Root cause / correction
+## FIX1
 
-The original R1 cleanup wrote CRAM through CPU transfers and immediately performed CRAM readback. The VDP FIFO was not explicitly drained before switching the VDP command port to CRAM-read mode. This produced a false `PALETTE_RESIDUE` result on the target emulator.
+Commit: `16ea3ccad96b51e0514e88076ee6c4f00b752098`.
 
-Fix commit: `16ea3ccad96b51e0514e88076ee6c4f00b752098`.
+Изменения:
 
-Correction:
+- all 64 CRAM entries cleared through one `PAL_setColors(0, palette_black, 64, CPU)`;
+- `VDP_waitFIFOEmpty()` after clear;
+- `VDP_waitFIFOEmpty()` before `PAL_getColors()` readback.
 
-- clear all 64 CRAM entries in one `PAL_setColors(0, palette_black, 64, CPU)` operation;
-- call `VDP_waitFIFOEmpty()` after the write;
-- call `VDP_waitFIFOEmpty()` again immediately before CRAM readback.
+CI run `34177478564`: SUCCESS.
 
-No R2 content, old DEV code or Granada assets/code were introduced.
+## Target test 2 — FIX1
 
-## CI after fix
+Пользователь повторно проверил ROM и сообщил, что поведение визуально осталось нормальным, но debug self-check всё ещё рос вместе с переходами:
 
-GitHub Actions run: `34177478564`.
+- TEST_BATTLE: `TRANS:007 ERR:07`, `LAST ERROR: PALETTE_RESIDUE`;
+- GARAGE: `TRANS:009 ERR:09`, `LAST ERROR: PALETTE_RESIDUE`.
 
-Result: **SUCCESS**.
+Следовательно предположение, что достаточно только drain FIFO, было неполным. FIX1 не закрывает defect.
 
-- two clean SGDK 2.11 builds: PASS;
+## Уточнённая причина
+
+CRAM cleanup/readback всё ещё выполнялся при включённом active display. Для R1 это ненадёжная диагностическая транзакция: мы пытались доказать состояние CRAM в момент, когда VDP одновременно обслуживает видимый scanout.
+
+SGDK сам использует временное отключение display для безопасных/быстрых операций видеопамяти в `VDP_resetScreen()`.
+
+## FIX2
+
+Commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`.
+
+Теперь каждый state-bank transition выполняется как blanked transaction:
+
+1. `VDP_setEnable(FALSE)`;
+2. drain FIFO;
+3. state leave + planes/sprites/CRAM cleanup;
+4. CRAM readback с interrupts masked вокруг `PAL_getColors()`;
+5. загрузка нового bank и draw нового state;
+6. drain FIFO;
+7. `VDP_setEnable(TRUE)`.
+
+Никакого R2 content, старого DEV-кода или Granada assets/code не добавлено.
+
+### FIX2 CI
+
+GitHub Actions run: `34178302167` — **SUCCESS**.
+
+- source contract: PASS;
+- build A: PASS;
+- build B: PASS;
 - byte-for-byte reproducibility: PASS;
 - independent ROM audit: PASS;
-- artifact publication: PASS.
+- ROM size: `131072` bytes;
+- ROM SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
+- header checksum: `0xAC94`;
+- required checksum: `0xAC94`;
+- SGDK full-ROM XOR-fold: `0x0000`.
 
-Target emulator re-test is still required.
+## Required target result for FIX2
 
-## Required target result
+До soak обычные переходы должны оставлять `ERR:00`.
 
-After boot and normal transitions, debug layer must remain `ERR:00`.
-
-After pressing C in MAIN_MENU and completing the 100-transition soak:
+После C в MAIN_MENU и завершения 100 переходов:
 
 - `SOAK: PASS 100/100`;
 - `ERR:00`;
 - `STATE: MAIN_MENU`;
 - `BANK: MENU`;
-- manual input still works.
+- manual input всё ещё работает.
 
-Until that is confirmed, **R1 remains TARGET PENDING and R2 remains blocked**.
+До этого подтверждения **R1 остаётся TARGET RETEST PENDING, R2 BLOCKED**.
