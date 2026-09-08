@@ -22,7 +22,9 @@ def decode_text_payload(parts, out_name):
 
 
 bg_path = decode_text_payload([
-    "r2_menu_bg.png.b64.000",
+    "r2_menu_bg.png.b64.000a",
+    "r2_menu_bg.png.b64.000b2",
+    "r2_menu_bg.png.b64.000c",
     "r2_menu_bg.png.b64.001",
     "r2_menu_bg.png.b64.01",
     "r2_menu_bg.png.b64.02",
@@ -38,8 +40,6 @@ bg.load()
 if bg.mode != "P" or bg.size != (320, 224):
     raise SystemExit(f"R2 background format mismatch: {bg.mode} {bg.size}")
 
-# Selector graphics are derived from the approved menu asset itself so they
-# share the exact same Mega Drive palette. No separate binary payload is used.
 palette = bg.getpalette()
 target = (251, 224, 73)
 yellow = min(
