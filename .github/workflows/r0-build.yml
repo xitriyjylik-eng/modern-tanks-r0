@@ -1,4 +1,4 @@
-name: R2 Animated Main Menu SGDK CI
+name: R2 Color-Restore Animated Main Menu SGDK CI
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify direct R2 assets
+      - name: Verify exact R2 color-restored assets
         shell: bash
         run: |
           set -euo pipefail
@@ -26,48 +26,95 @@ jobs:
           from PIL import Image
           from pathlib import Path
           import hashlib
-
           root=Path('sgdk/res')
           exp={
             'r2_menu_bg.png':('2e8630affb921321a26d0e2f893409cbd23124ac874fda2377cd321a4336cf29',(320,224)),
             'r2_top_right_patch.png':('a065051b471ebaf7d17d2e42ef4a2c1b683117e5fbc25aab9037bbbb2b023bf5',(88,56)),
             'r2_selector.png':('36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd',(144,16)),
-            'r2_river_0.png':('8d64f434b735fd1a0524c81343177a4090bfbe2099dc3ea2de1aa4fc264e32e9',(112,224)),
-            'r2_river_1.png':('938b39af9d6daa8c1c334295e26be85389193e5a0fab5111cc81ac14a65a4bca',(112,224)),
-            'r2_river_2.png':('7f9466988cd80b1e23996c58f906b8c296a2288ece733c01c60cb04255568ca9',(112,224)),
-            'r2_river_3.png':('7494366afa1050ec00dad8197f094422a848032fd3e69fd2279b377b31f8edda',(112,224)),
-            'r2_flag_left_0.png':('9047d555e3abf9b3a4907d5489c75e4ab295503468f01c82abc84f2d5aca6bd4',(32,32)),
-            'r2_flag_left_1.png':('577cce63795acf10d2914eb20ba4e7d2b85cd4ffe84767c617674a1c076658aa',(32,32)),
-            'r2_flag_left_2.png':('a9592b1e93e1c4eeca390d2bf7a4728b16dfdb746ec87075cacdeb4770e9c191',(32,32)),
-            'r2_flag_left_3.png':('a7b8f8d10b14bc1be7fed74cb07aafbdccf6b2fa4c8b509fbc83c1be8e1a5539',(32,32)),
-            'r2_flag_right_0.png':('91be5ee35024f9f646d8a87ce9626c6e0165323cc8e61b75323649017a8898bd',(32,40)),
-            'r2_flag_right_1.png':('1f081beed369d1dad30bb14fc7f71240694cf3c2a8d1657a8b154d915820918d',(32,40)),
-            'r2_flag_right_2.png':('7ec98e71e78bcaa1c8084725db79b54a6331cac7d269f144b19dd66ceafc4a24',(32,40)),
-            'r2_flag_right_3.png':('5aad5c5cb0bd5d1427d2371c8a1c89495273df0db966ef9cfeab2513eee4f053',(32,40)),
-            'r2_fire_0.png':('0188b1fc93d759866addf9c9b072da5d5df7ad17f4cffc2efb3ca60783fc6c21',(32,40)),
-            'r2_fire_1.png':('35a2c54bc5230a7b03b2d7b52a7cd182b75f0922f05c7d2540c9c36badcb14f8',(32,40)),
-            'r2_fire_2.png':('212e17193da71a49d6ddb4aa9faa0c65080141f6185f17b26e770b0b91f4fcaa',(32,40)),
-            'r2_fire_3.png':('095091a93ab1d2a7b32801606eff0062554b4f6f1fc9ca4838a338cbb5562ae8',(32,40)),
+            'r2_river_0.png':('9d93723702d78ea580c3c559c11edffcaeec3515bb16e7ed6ee1340f571bbf20',(112,224)),
+            'r2_river_1.png':('9e0052f9072cbf53b15fd38c8e21b12b0e8309feabed00c30934ee12bf63be4b',(112,224)),
+            'r2_river_2.png':('4f51103ed50e6ab99f7de0880ef2ea208562c039d784c0029ef581f22ba9c277',(112,224)),
+            'r2_river_3.png':('b9f92d8506bb5063458ba4ffb472d30cc63a3fb0a6548cc6eb49220fca35c94e',(112,224)),
+            'r2_flag_left_0.png':('d3d4d8c3db46e20619c0110b7fb815d2842042dde45cdb187c7511c24f58ca73',(32,32)),
+            'r2_flag_left_1.png':('fbd5b6b0fd32bdbd97f8d2579dbde5f0c8d58b2c01464e139efa3845cf96dd86',(32,32)),
+            'r2_flag_left_2.png':('baf32b00ffd12a25145d6113f0764ede30efaf33fc6ddeb50d2e921fdbd3a1fd',(32,32)),
+            'r2_flag_left_3.png':('c5dd85da1cba88800e509ca1444abb36e11ae131a56945508d0a94e3e0b09994',(32,32)),
+            'r2_flag_right_0.png':('2f6a9a853258860770cfc4a471f72dd37707d97e516ff8d14214969430a3d998',(32,40)),
+            'r2_flag_right_1.png':('c50bfe758e3b84b69f14f7e44dc8e74d6b5321a234b72435326ec365baae4f47',(32,40)),
+            'r2_flag_right_2.png':('26ddaf8ad1e789795aa17fcf8df749ead9ec702685764fc614e6b7b15278ae42',(32,40)),
+            'r2_flag_right_3.png':('4ab4c18979b1a3ee6600fbabda03bb53e0bd3cce3936b0b1242d96a909169e7e',(32,40)),
+            'r2_fire_0.png':('e865e0e5407ccdd475443e90e2f74160b29677baa2e99d5890b45905211ca84b',(32,40)),
+            'r2_fire_1.png':('a5d31f299bb0b3c813837e4a8472f8c53a815ce6c25cc224215441e19ac9e0ed',(32,40)),
+            'r2_fire_2.png':('c03f4bde76fd1f3ac5d9f83328583e9085cb62921e4f4837ba3a90253f446aa3',(32,40)),
+            'r2_fire_3.png':('9426b9aecb01b6320f44634d485ca74eacec96227f20d2c18b28c9c4a2de93dd',(32,40)),
           }
-
+          images={}
           for name,(sha,size) in exp.items():
               p=root/name
-              assert p.is_file(), name
+              assert p.is_file(), f'missing {name}'
               data=p.read_bytes()
-              assert hashlib.sha256(data).hexdigest()==sha, name
+              actual=hashlib.sha256(data).hexdigest()
+              assert actual==sha,(name,actual,sha)
               im=Image.open(p); im.load()
-              assert im.mode=='P' and im.size==size, (name,im.mode,im.size)
+              assert im.mode=='P' and im.size==size,(name,im.mode,im.size)
+              images[name]=im
+          bg=images['r2_menu_bg.png']; bgpal=bg.getpalette()
+          assert images['r2_top_right_patch.png'].getpalette()==bgpal
+          assert set(images['r2_selector.png'].getdata()) == {0,15}
+          assert 15 not in set(bg.getdata())
+          for name,im in images.items():
+              if name.startswith(('r2_river_','r2_flag_','r2_fire_')):
+                  assert im.getpalette()==bgpal, f'palette drift: {name}'
+          for name,im in images.items():
+              if name=='r2_selector.png':
+                  continue
               for ty in range(0,im.height,8):
                   for tx in range(0,im.width,8):
                       banks={((im.getpixel((x,y))>>4)&3) for y in range(ty,ty+8) for x in range(tx,tx+8)}
                       assert len(banks)==1,(name,tx,ty,banks)
-
-          sel=Image.open(root/'r2_selector.png'); sel.load()
-          assert set(sel.getdata()) == {0,15}
-          print('R2 direct animated assets PASS:',len(exp),'PNGs')
+          for prefix in ('r2_flag_left_','r2_flag_right_','r2_fire_'):
+              for i in range(4):
+                  data=list(images[f'{prefix}{i}.png'].getdata())
+                  assert 0 in data
+                  visible=[v for v in data if v]
+                  assert visible and all((v>>4)==0 for v in visible)
+          for i in range(4):
+              data=list(images[f'r2_river_{i}.png'].getdata())
+              assert 16 in data and all((v>>4)==1 for v in data)
+          def diff(a,b): return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
+          thresholds={'r2_river_':500,'r2_flag_left_':20,'r2_flag_right_':20,'r2_fire_':50}
+          for prefix,minimum in thresholds.items():
+              frames=[images[f'{prefix}{i}.png'] for i in range(4)]
+              diffs=[diff(frames[i],frames[(i+1)%4]) for i in range(4)]
+              assert min(diffs)>=minimum,(prefix,diffs,minimum)
+              print(prefix,'frame diffs',diffs)
+          print('R2 color-restored animated assets PASS:',len(exp),'PNGs')
           PY
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_*.png > sgdk/out/R2_RESOURCE_SHA256.txt
+
+      - name: Audit R2 VRAM tile budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          root=Path('sgdk/res')
+          def uniq(name):
+              im=Image.open(root/name); im.load(); s=set()
+              for y in range(0,im.height,8):
+                  for x in range(0,im.width,8): s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
+              return len(s)
+          bg=uniq('r2_menu_bg.png'); patch=uniq('r2_top_right_patch.png'); sel=uniq('r2_selector.png')
+          river=max(uniq(f'r2_river_{i}.png') for i in range(4))
+          fl=max(uniq(f'r2_flag_left_{i}.png') for i in range(4))
+          fr=max(uniq(f'r2_flag_right_{i}.png') for i in range(4))
+          fire=max(uniq(f'r2_fire_{i}.png') for i in range(4))
+          total=bg+patch+sel+river+fl+fr+fire
+          Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(f'R2 tile slots: {total}\n',encoding='utf-8')
+          print('conservative tile slots',total)
+          PY
 
       - name: Verify R2 source contract
         shell: bash
@@ -77,11 +124,12 @@ jobs:
           from pathlib import Path
           src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
           res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
-          for token in ('JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX','R2_ANIM_FRAMES 4','apply_enhanced_menu_palette','r2_top_right_patch','r2_river_3','r2_flag_right_3','r2_fire_3'):
+          for token in ('JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX','R2_ANIM_FRAMES 4','R2_RIVER_HOLD_TICKS 5','R2_FLAG_HOLD_TICKS 9','R2_FIRE_HOLD_TICKS 4','draw_river_frame','draw_flag_frames','draw_fire_frame','r2_top_right_patch','r2_river_3','r2_flag_right_3','r2_fire_3'):
               assert token in src, token
+          assert 'apply_enhanced_menu_palette' not in src
           for token in ('IMAGE r2_menu_bg','IMAGE r2_top_right_patch','IMAGE r2_river_3','IMAGE r2_flag_left_3','IMAGE r2_flag_right_3','IMAGE r2_fire_3'):
               assert token in res, token
-          print('R2 animated source contract PASS')
+          print('R2 color-restored source contract PASS')
           PY
 
       - name: Pin SGDK 2.11
@@ -106,7 +154,6 @@ jobs:
 
       - name: Build A
         run: docker run --rm -v /tmp/sgdk-r2-a:/m68k "$SGDK_IMAGE_ID"
-
       - name: Build B
         run: docker run --rm -v /tmp/sgdk-r2-b:/m68k "$SGDK_IMAGE_ID"
 
@@ -130,34 +177,35 @@ jobs:
           ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
           if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — Animated Menu Candidate
+          # Modern Tanks R2 — Color-Restored Animated Menu Candidate
           - Commit: ${GITHUB_SHA}
           - SGDK: 2.11 pinned container
           - ROM size: ${ROM_SIZE}
           - ROM SHA-256: ${ROM_SHA}
           - Native presentation: 320x224
-          - Russian menu typography: retained
+          - Russian menu typography/layout: unchanged
           - Top-right minimap: removed
-          - River: 4-frame downward flow
-          - Flags: 4-frame wind animation, left and right
-          - Fire: 4-frame burning animation
-          - Battlefield palette: enhanced contrast/saturation
+          - Landscape palette: restored to accepted original
+          - River: four-frame full-water downward motion
+          - Flags: four-frame visible wind motion
+          - Fire: transparent four-frame flame, no rectangular backdrop
           - R1 core: preserved
           - R3 gameplay: not started
           - Gate: TARGET PENDING owner emulator acceptance
           REPORT
 
-      - name: Publish R2 animated candidate
+      - name: Publish R2 color-restored candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Animated_Menu_Candidate
+          name: Modern_Tanks_R2_Color_Restore_Animated_Candidate
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
             sgdk/out/R2_ROM_AUDIT.json
             sgdk/out/R2_BUILD_REPORT.md
             sgdk/out/R2_RESOURCE_SHA256.txt
+            sgdk/out/R2_RESOURCE_BUDGET.md
             sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
             sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
           if-no-files-found: warn

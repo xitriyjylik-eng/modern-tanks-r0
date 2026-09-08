@@ -9,7 +9,7 @@
  * - native 320x224 presentation
  * - accepted Russian menu typography retained
  * - top-right minimap removed from the menu background
- * - higher-detail / higher-contrast battlefield background
+ * - detailed battlefield background with original accepted color balance
  * - two wind-driven flags
  * - river ambience animated in a downward-flow cycle
  * - burning wreck fire animation
@@ -46,7 +46,9 @@ typedef struct
 #define R2_BOOT_TICKS 60
 #define R2_MENU_COUNT 4
 #define R2_ANIM_FRAMES 4
-#define R2_ANIM_HOLD_TICKS 7
+#define R2_RIVER_HOLD_TICKS 5
+#define R2_FLAG_HOLD_TICKS 9
+#define R2_FIRE_HOLD_TICKS 4
 
 #define R2_SELECTOR_X 11
 #define R2_SELECTOR_W 18
@@ -84,8 +86,12 @@ static u16 flagLeftTileBase = 0;
 static u16 flagRightTileBase = 0;
 static u16 fireTileBase = 0;
 static u16 selectorPulse = 0;
-static u16 menuAnimTick = 0;
-static u16 menuAnimFrame = 0;
+static u16 riverAnimTick = 0;
+static u16 flagAnimTick = 0;
+static u16 fireAnimTick = 0;
+static u16 riverAnimFrame = 0;
+static u16 flagAnimFrame = 0;
+static u16 fireAnimFrame = 0;
 static bool menuArtLoaded = FALSE;
 
 /* Native pixel Y rows 88/104/120/136 -> tile rows 11/13/15/17. */
@@ -160,22 +166,6 @@ static u16 max4(u16 a, u16 b, u16 c, u16 d)
     return m;
 }
 
-static void apply_enhanced_menu_palette(void)
-{
-    /* PAL3 refinement: stronger terrain contrast, fire and highlights. */
-    PAL_setColor(51, RGB24_TO_VDPCOLOR(0x706B34));
-    PAL_setColor(52, RGB24_TO_VDPCOLOR(0x855F38));
-    PAL_setColor(53, RGB24_TO_VDPCOLOR(0x6C5A35));
-    PAL_setColor(54, RGB24_TO_VDPCOLOR(0x4E5825));
-    PAL_setColor(55, RGB24_TO_VDPCOLOR(0x792D1E));
-    PAL_setColor(56, RGB24_TO_VDPCOLOR(0xD02D18));
-    PAL_setColor(57, RGB24_TO_VDPCOLOR(0xF45A14));
-    PAL_setColor(58, RGB24_TO_VDPCOLOR(0xFF911C));
-    PAL_setColor(59, RGB24_TO_VDPCOLOR(0x707060));
-    PAL_setColor(60, RGB24_TO_VDPCOLOR(0x473A2B));
-    PAL_setColor(61, RGB24_TO_VDPCOLOR(0x31261D));
-}
-
 static void resource_bank_unload(void)
 {
     VDP_clearPlane(BG_A, TRUE);
@@ -238,9 +228,8 @@ static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
                     TRUE);
 }
 
-static void draw_menu_ambient(u16 frame)
+static void draw_river_frame(u16 frame)
 {
-    /* River first; flag/fire overlays then sit above it. */
     VDP_drawImageEx(BG_A,
                     riverFrames[frame],
                     TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, riverTileBase),
@@ -248,7 +237,10 @@ static void draw_menu_ambient(u16 frame)
                     R2_RIVER_Y,
                     FALSE,
                     TRUE);
+}
 
+static void draw_flag_frames(u16 frame)
+{
     VDP_drawImageEx(BG_A,
                     flagLeftFrames[frame],
                     TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, flagLeftTileBase),
@@ -264,7 +256,10 @@ static void draw_menu_ambient(u16 frame)
                     R2_FLAG_RIGHT_Y,
                     FALSE,
                     TRUE);
+}
 
+static void draw_fire_frame(u16 frame)
+{
     VDP_drawImageEx(BG_A,
                     fireFrames[frame],
                     TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, fireTileBase),
@@ -288,10 +283,6 @@ static void draw_menu_art(void)
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 
-    /*
-     * 8bpp indexed source: upper two index bits choose PAL0..PAL3 per 8x8 tile.
-     * This keeps the maximum-detail 64-color menu art within normal Mega Drive rules.
-     */
     VDP_drawImageEx(BG_B,
                     &r2_menu_bg,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, TILE_USER_INDEX),
@@ -304,7 +295,6 @@ static void draw_menu_art(void)
     patchTiles = r2_top_right_patch.tileset->numTile;
     patchTileBase = TILE_USER_INDEX + bgTiles;
 
-    /* Replace the old top-right minimap directly with battlefield terrain. */
     VDP_drawImageEx(BG_B,
                     &r2_top_right_patch,
                     TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, patchTileBase),
@@ -312,9 +302,6 @@ static void draw_menu_art(void)
                     0,
                     FALSE,
                     TRUE);
-
-    /* Same indexed art, stronger PAL3 values: no rescaling or generated substitute. */
-    apply_enhanced_menu_palette();
 
     selectorTiles = r2_selector.tileset->numTile;
     riverTiles = max4(r2_river_0.tileset->numTile,
@@ -352,12 +339,15 @@ static void draw_menu_art(void)
         return;
     }
 
-    menuAnimTick = 0;
-    menuAnimFrame = 0;
-    draw_menu_ambient(menuAnimFrame);
-
-    /* River image spans 14 tile columns and can rewrite transparent BG_A cells,
-       therefore selector is always redrawn after each ambient frame. */
+    riverAnimTick = 0;
+    flagAnimTick = 0;
+    fireAnimTick = 0;
+    riverAnimFrame = 0;
+    flagAnimFrame = 0;
+    fireAnimFrame = 0;
+    draw_river_frame(riverAnimFrame);
+    draw_flag_frames(flagAnimFrame);
+    draw_fire_frame(fireAnimFrame);
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -377,14 +367,29 @@ static void update_menu_visuals(void)
             PAL_setColor(R2_SELECTOR_CRAM_INDEX, RGB24_TO_VDPCOLOR(0xC9A72F));
     }
 
-    menuAnimTick++;
-    if (menuAnimTick >= R2_ANIM_HOLD_TICKS)
+    riverAnimTick++;
+    if (riverAnimTick >= R2_RIVER_HOLD_TICKS)
     {
-        menuAnimTick = 0;
-        menuAnimFrame++;
-        if (menuAnimFrame >= R2_ANIM_FRAMES) menuAnimFrame = 0;
-        draw_menu_ambient(menuAnimFrame);
+        riverAnimTick = 0;
+        riverAnimFrame = (riverAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_river_frame(riverAnimFrame);
         draw_selector(menuIndex, menuIndex, TRUE);
+    }
+
+    flagAnimTick++;
+    if (flagAnimTick >= R2_FLAG_HOLD_TICKS)
+    {
+        flagAnimTick = 0;
+        flagAnimFrame = (flagAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_flag_frames(flagAnimFrame);
+    }
+
+    fireAnimTick++;
+    if (fireAnimTick >= R2_FIRE_HOLD_TICKS)
+    {
+        fireAnimTick = 0;
+        fireAnimFrame = (fireAnimFrame + 1) % R2_ANIM_FRAMES;
+        draw_fire_frame(fireAnimFrame);
     }
 }
 
@@ -516,7 +521,6 @@ static void handle_input_frame(void)
             {
                 if (menuIndex == 0) change_state(STATE_TEST_BATTLE);
                 else if (menuIndex == 1) change_state(STATE_GARAGE);
-                /* Statistics and options remain visual-only until their planned stages. */
             }
             break;
 
