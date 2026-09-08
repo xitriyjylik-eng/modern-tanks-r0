@@ -11,136 +11,98 @@
 5. Старую DEV-линию, DEV ROM, Python opcode-emitter и старый DEV master-plan не возвращать.
 6. Техническая линия только R0–R12 clean rebuild на SGDK 2.11.
 
-## 2. R0 Hardware Probe — ACCEPTED / CLOSED
+## 2. Закрытые этапы
 
-R0 закрыт владельцем проекта после фактической проверки в MD Emu Games Gen на Android.
+- **R0 Hardware Probe — ACCEPTED / CLOSED.** Target MD Emu Games Gen PASS.
+- **R1 Core / State Machine — ACCEPTED / CLOSED.** FIX2: `ERR:00`, `SOAK: PASS 100/100`, target PASS. Accepted source commit `bc858a619de76a1f5c3112859914ea132e9bf7be`, run `34178302167`.
 
-Подтверждено: стабильный запуск, правильное изображение, R0A PASS, R0B PASS, D-Pad и A/B/C/START PASS. X/Y/Z не входят в scope обязательного 3-button path.
+## 3. Текущий milestone — R2 MAIN MENU VISUAL TARGET
 
-CI R0:
+Статус: **MAX DETAIL BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
 
-- run `34175976629`;
-- commit `10bd881926743a88c8a211919b176505cc95054c`;
-- ROM 131072 bytes;
-- SHA-256 `1b5de098a33a0ac54256c8680acc0440bdec76ae5c74fa2551bff7050b24ef11`;
-- verifier PASS.
+R3 не начат и остаётся запрещён до прямого принятия R2 владельцем.
 
-## 3. R1 Core / State Machine — ACCEPTED / CLOSED
+### История отклонений
 
-Финальный accepted source: FIX2.
+Первый R2 candidate и Visual Rework 1 технически собирались и работали, но владелец проекта отклонил их визуально как слишком упрощённые относительно locked `references/MAIN_MENU_REFERENCE.png`.
 
-- source commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`;
-- GitHub Actions run: `34178302167` — SUCCESS;
-- ROM: 131072 bytes;
-- SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
-- header checksum: `0xAC94`;
-- two clean SGDK 2.11 builds: byte-identical;
-- independent ROM verifier: PASS.
+Не возвращаться к ним. Текущий candidate — **R2 MAX DETAIL**.
 
-Target acceptance:
+## 4. Целевая платформа
 
-- manual MENU / TEST_BATTLE / GARAGE transitions PASS;
-- `ERR:00`;
-- `SOAK: PASS 100/100`;
-- final `STATE: MAIN_MENU`, `BANK: MENU`;
-- user continued to `TRANS:114` with `ERR:00`.
+Modern Tanks остаётся настоящим Mega Drive/Genesis ROM.
 
-Полный результат: `tests/r1/R1_ACCEPTANCE_RESULT.md`.
+- SG800 рассматривается как MD/Mega Drive emulator host для пользовательских ROM;
+- HDMI/4K — вывод/upscaling, а не внутреннее разрешение игры;
+- основной render target остаётся H40 320×224 Mega Drive;
+- тот же `.bin` должен работать на SG800 и в MD/Genesis эмуляторах ПК;
+- обязательный control path — 3-button D-Pad + A/B/C/START; 6-button pads совместимы, X/Y/Z не требуются базовой игре.
 
-## 4. Текущий milestone — R2 MAIN MENU VISUAL TARGET
+## 5. R2 MAX DETAIL art direction
 
-Статус: **VISUAL REWORK 1 — BUILD/CI PASS / TARGET ACCEPTANCE PENDING**.
+Вместо малого процедурного улучшения сделан полный художественный rework с существенно более плотным использованием Mega Drive pattern budget:
 
-R2 реализуется поверх принятого R1 core. R3 не начат и остаётся запрещён до отдельного принятия R2.
-
-### Первый R2 candidate — REJECTED VISUALLY
-
-Первый R2 ROM прошёл SGDK CI и функционально работал, но владелец проекта после запуска в MD Emu Games Gen **не принял его визуально**.
-
-Причина: композиция была слишком упрощённой относительно locked `references/MAIN_MENU_REFERENCE.png`: плоский logo, клетчатый/simple battlefield, слишком широкая центральная panel, условные tank icons и упрощённый bottom HUD.
-
-Этот первый R2 build больше не считать acceptance candidate.
-
-## 5. R2 Visual Rework 1
-
-Новый вариант перерисован в native 320×224 непосредственно для Mega Drive.
-
-В нём есть:
-
-- более узкая reference-like central menu composition;
-- dimensional metallic MODERN TANKS logo + steel side wings;
+- native 320×224 indexed pixel art;
+- собственный hand-defined pixel font вместо TTF/downscale;
+- крупный layered metallic `MODERN TANKS` logo с steel wings/rivets/bevels;
+- organic battlefield вместо заметной 8×8 сетки;
 - winding river + shoreline;
-- forest clusters;
-- grass/dirt variation;
+- grass/dirt variation, roads;
 - bridges;
 - brick/steel fortifications;
-- craters/debris;
-- multiple distinct battlefield tanks;
-- muzzle flashes, shell traces, explosions, smoke;
-- edge signs;
-- канонические пункты `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
-- animated selector;
-- detailed T-1…T-4 strip;
+- clustered trees;
+- craters/rubble;
+- multiple distinct top-down tanks;
+- shells, muzzle flashes, explosions, smoke;
+- steel central menu;
+- canonical `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
+- detailed T-1…T-4 cards;
 - segmented stats bars;
-- improved minimap;
-- subtle scripted moving background tank;
-- accepted R1 menu-bank unload/reload and CRAM/sprite cleanup path.
+- detailed minimap;
+- selector pulse/navigation;
+- moving tank overlay;
+- accepted R1 bank unload/reload + CRAM/sprite cleanup сохранены.
 
-Пункты главного меню не меняются ради буквального копирования reference: по frozen design `ПРОКАЧКА` находится внутри ГАРАЖА, а выбор миссий — внутри ИГРАТЬ.
+`ПРОКАЧКА` остаётся внутри ГАРАЖА, выбор миссий — внутри ИГРАТЬ согласно frozen design.
 
-## 6. R2 art pipeline
+Locked reference PNG не встроен, не изменён и не downscale'ится. Granada assets/code отсутствуют.
 
-Locked `references/MAIN_MENU_REFERENCE.png` не изменён, не перекодирован и не встроен в ROM.
+## 6. R2 MAX DETAIL CI — PASS
 
-Runtime art детерминированно генерируется скриптом:
-
-`sgdk/tools/generate_r2_art.py`
-
-Скрипт создаёт indexed 320×224 PNG и selector assets непосредственно в Mega Drive-oriented palette layout перед SGDK ResComp. Granada assets/code отсутствуют. Старая DEV-линия отсутствует.
-
-## 7. Visual Rework 1 CI — PASS
-
-Финальный build candidate:
-
-- build commit: `0442a22167097d4b9dc5964301e93fbf2f894234`;
-- GitHub Actions run: `34182713358`;
+- source commit: `53ef4dba355abbad5ad052ef1ee35345e17006bf`;
+- GitHub Actions run: `34184514661`;
 - job `build-r2`: SUCCESS;
 - generated-art validation: PASS;
+- generated resource SHA checks: PASS;
 - source/locked-art contract: PASS;
 - SGDK 2.11 build A: PASS;
 - SGDK 2.11 build B: PASS;
 - byte-for-byte reproducibility: PASS;
 - independent ROM audit: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `5b6a711bc38255793950c0259b2e297d57fa0bc5978a1210fed4e4911619fe98`;
-- header checksum: `0x3D61`;
-- required checksum: `0x3D61`;
-- SGDK full-ROM XOR-fold: `0x0000`.
+- ROM SHA-256: `52b0395fb023ebdaa08ca7e03152fa6b2040ed5c9a6b997509c618c4a9e95eba`;
+- header checksum: `0xE671`;
+- full-ROM XOR-fold: `0x0000`;
+- exact `r2_menu_bg.png` SHA-256: `927534f927eaf17cd939a4977f20adbd8a705ca405f4c1a37511bd2a593376d0`.
 
-Resource budget (conservative pre-ResComp upper bound):
+Conservative project-pattern estimate: about **883 tiles / 28,256 bytes**, leaving about **16,800 bytes** against the 44 KiB project-pattern ceiling. Это сознательно заметно плотнее ранних R2 builds.
 
-- 658 unique tiles;
-- 21,056 bytes pattern data;
-- at least 24,000 bytes free относительно 44 KiB project pattern ceiling;
-- project VDP sprite payload: 0.
+Полный статус: `tests/r2/R2_MAX_DETAIL_BUILD_STATUS.md`.
 
-Подробности: `tests/r2/R2_BUILD_STATUS.md` и `sgdk/res/R2_RESOURCE_BUDGET.md`.
+## 7. Следующий обязательный шаг
 
-## 8. Следующий обязательный шаг
+Только target-проверка **R2 MAX DETAIL ROM**:
 
-Только target-проверка **Visual Rework 1** в MD Emu Games Gen:
-
-- compare screen с `references/MAIN_MENU_REFERENCE.png`;
-- проверить visual density/composition/logo/background/bottom strip;
-- selector Up/Down;
-- selector pulse + moving background tank;
+- визуальное сравнение с locked main-menu reference;
+- selector Up/Down + pulse;
+- moving battlefield tank;
 - ИГРАТЬ → TEST_BATTLE → B → MENU;
 - ГАРАЖ → GARAGE → B → MENU;
 - после переходов `ERR:00`;
 - отсутствие VRAM/palette/sprite corruption.
 
-## 9. Строгий запрет
+Если внешний вид всё ещё не устраивает — продолжать R2, а не переходить к R3.
+
+## 8. Строгий запрет
 
 **R2 пока НЕ ACCEPTED. R3 НЕ НАЧИНАТЬ.**
-
-R3 разрешается только после прямого подтверждения владельцем, что R2 принят.
