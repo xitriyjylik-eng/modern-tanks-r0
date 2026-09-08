@@ -8,50 +8,44 @@
 4. `tests/r0/R0_ACCEPTANCE_RESULT.md`
 5. `tests/r1/R1_ACCEPTANCE_RESULT.md`
 6. `tests/r2/R2_BUILD_STATUS.md`
-7. `tests/r2/R2_TANK_REFERENCE_FIX.md`
-8. `tests/r2/R2_ACCEPTANCE_CHECKLIST.md`
-9. `design/GAME_DESIGN_FROZEN.md`
+7. `tests/r2/R2_ACCEPTANCE_CHECKLIST.md`
 
 ## Текущая точка
 
-- **R0 Hardware Probe — ACCEPTED / CLOSED.**
-- **R1 Core / State Machine — ACCEPTED / CLOSED.**
-- **R2 Main Menu Visual Target — TANK REFERENCE FIX BUILD/CI PASS / TARGET ACCEPTANCE PENDING.**
-- **R3 и далее — BLOCKED до прямого R2 acceptance.**
+- **R0 — ACCEPTED / CLOSED.**
+- **R1 — ACCEPTED / CLOSED.**
+- **R2 — FOCUSED MENU / TANK REFERENCE REWORK BUILD/CI PASS / TARGET PENDING.**
+- **R3+ — BLOCKED до прямого R2 acceptance.**
 
-## Критическая история R2
+## Последнее решение владельца
 
-Первый R2 был отклонён как слишком простой. MAX DETAIL повысил плотность экрана, но владелец отдельно указал, что танки не соответствовали locked `references/TANKS_DETAILED_REFERENCE.png`.
+Не возвращать нижний `T-1..T-4 / параметры / карта` HUD в главное меню. Он удалён как нефункциональный и перегружающий экран.
 
-Не возвращаться к упрощённым tank icons.
+Не возвращать декоративный движущийся танк. Он удалён из runtime и из resources.
 
-Текущий candidate — **R2 TANK REFERENCE FIX**.
+Главное меню теперь использует всё нижнее пространство как продолжение battlefield art. Tank/class selection относится к GARAGE; map/mission context — к соответствующим игровым экранам.
 
-## Инварианты
+## Tank art direction
 
-- идея Modern Tanks не меняется;
-- `design/GAME_DESIGN_FROZEN.md` — game-design truth;
-- три PNG reference не изменять/не перекодировать/не заменять;
-- `MAIN_MENU_REFERENCE.png` — визуальная цель меню;
-- `TANKS_DETAILED_REFERENCE.png` — обязательная цель дизайна танков;
-- Granada — только технический образец Mega Drive;
-- старая DEV-линия запрещена;
-- build только через clean SGDK 2.11 path.
+`TANKS_DETAILED_REFERENCE.png` остаётся обязательным образцом. Не использовать простые прямоугольные tank icons.
 
-## Текущий R2 build
+Текущий R2 содержит вручную нарисованный top-down renderer: отдельные tracks, shaped hull, turret/ring, mantlet + long gun, hatch/details и разные пропорции T-1/T-2/T-3/T-4.
 
-- build commit `acba3abbf58fd3d1666617d51431c2b5f31eab43`;
-- GitHub Actions run `34185523022` — SUCCESS;
+Locked PNG не изменять и не встраивать как готовую текстуру.
+
+## Текущий tested build
+
+- GitHub Actions run `34186426856` — SUCCESS;
+- tested commit `831cd8348997cdb13e82cfc8422c6748f3e0e0b1`;
 - ROM 131072 bytes;
-- SHA-256 `5b73a0e9a1d7c8efb28541631cf09580790c0496d7b60634db41543b3ad586d9`;
-- header checksum `0x647E`;
+- SHA-256 `d4baf97f7884ae0e91be0bc599d11046959fae88407c2db7235dd37726dc47f4`;
+- header checksum `0x6DF1`;
 - verifier PASS;
-- build A/B byte-identical.
-
-В последней коррекции перерисованы T-1…T-4 cards, battlefield tanks и moving 16×16 tank. Требуемый язык: top-down, отдельные tracks, shaped hull, turret, mantlet/barrel, hatch/details и разные class silhouettes.
+- build A/B byte-identical;
+- conservative patterns 31,168 bytes, 13,888 bytes free vs project 44 KiB ceiling.
 
 ## Следующее действие
 
-Только проверить текущий R2 ROM в MD Emu Games Gen / на целевой MD-совместимой платформе.
+Только проверить текущий R2 ROM визуально и функционально. Если не устраивает — продолжать R2.
 
-Если танки или общее меню всё ещё не устраивают — продолжать R2. **R3 не начинать.**
+**R3 НЕ НАЧИНАТЬ.**
