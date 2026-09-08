@@ -64,21 +64,45 @@ Target gate требовал 100 последовательных переход
 
 `LAST ERROR: R1_ITEM_NOT_IMPLEMENTED` при `ERR:00` не считается gate defect: это информационная строка при выборе intentionally locked R1 item и она не увеличивает `errorCount`.
 
-Итог: **R1 ACCEPTED / CLOSED. R2 UNLOCKED.**
+Итог: **R1 ACCEPTED / CLOSED.**
 
-## R2 — UNLOCKED / NOT STARTED
+## R2 — BUILD/CI PASS / TARGET ACCEPTANCE PENDING
 
-Menu visual conformance.
+Stage: Main Menu Visual Target.
+
+Build evidence:
+
+- build commit `49ebfa6087cf8c39c313fa305cd48892509f0948`;
+- GitHub Actions run `34180963691` — SUCCESS;
+- native-resolution R2 art generation PASS;
+- locked-art/source contract PASS;
+- two clean SGDK 2.11 builds PASS и byte-for-byte identical;
+- independent ROM audit PASS;
+- ROM size `131072` bytes;
+- ROM SHA-256 `dda9c3f62769371f9888b171a1ac2ac6374b886dead551db9fd3de657cbb539f`;
+- header checksum `0x031D`;
+- full-ROM XOR-fold `0x0000`.
 
 Gate R2:
 
-- screen comparison с `references/MAIN_MENU_REFERENCE.png`;
+- screen comparison с `references/MAIN_MENU_REFERENCE.png` по композиции/visual language;
+- крупный MODERN TANKS logo;
+- battlefield background;
+- steel frame language;
+- четыре канонических русских пункта меню;
+- tank-class strip;
+- stats preview;
+- mini-map preview;
+- selector animation + subtle scripted background action;
 - нет пустых placeholder-панелей;
 - нет автоматически уменьшенной грязной графики;
-- menu bank полностью выгружается при переходе в battle;
-- free VRAM зафиксирована в отчёте.
+- menu bank полностью выгружается при переходе в TEST_BATTLE/GARAGE shell;
+- после нескольких unload/reload циклов сохраняется `ERR:00`;
+- free VRAM/project pattern budget зафиксирован в `sgdk/res/R2_RESOURCE_BUDGET.md`.
 
-R3 не начинать до отдельного R2 acceptance.
+Полный target checklist: `tests/r2/R2_ACCEPTANCE_CHECKLIST.md`.
+
+**R2 пока НЕ ACCEPTED. R3 BLOCKED до прямого target PASS владельца.**
 
 ## R3
 Scrolling/HUD/window stability.
