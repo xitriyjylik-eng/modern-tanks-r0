@@ -13,39 +13,23 @@
 
 ## 2. R0 Hardware Probe — ACCEPTED / CLOSED
 
-R0 закрыт 2026-09-08 прямым решением владельца проекта после фактического target-теста.
+R0 закрыт владельцем проекта после фактической проверки в MD Emu Games Gen на Android.
 
-### CI
+Подтверждено: стабильный запуск, правильное изображение, R0A PASS, R0B PASS, D-Pad и A/B/C/START PASS. X/Y/Z не входят в scope обязательного 3-button path.
 
-- GitHub Actions run: `34175976629`;
-- commit: `10bd881926743a88c8a211919b176505cc95054c`;
-- ROM size: `131072` bytes;
-- SHA-256: `1b5de098a33a0ac54256c8680acc0440bdec76ae5c74fa2551bff7050b24ef11`;
-- header checksum: `0x5411`;
-- SGDK full-ROM XOR-fold: `0x0000`;
-- independent verifier: PASS;
-- two clean builds: byte-for-byte identical.
+CI R0:
 
-### Target test — MD Emu Games Gen / Android
+- run `34175976629`;
+- commit `10bd881926743a88c8a211919b176505cc95054c`;
+- ROM 131072 bytes;
+- SHA-256 `1b5de098a33a0ac54256c8680acc0440bdec76ae5c74fa2551bff7050b24ef11`;
+- verifier PASS.
 
-Пользователь лично подтвердил:
+## 3. Текущий milestone — R1 Core / State Machine
 
-- ROM запускается стабильно;
-- изображение правильное;
-- R0A PASS;
-- R0B PASS;
-- D-Pad PASS;
-- A/B/C/START PASS.
+Статус: **FUNCTIONAL TARGET PASS / FIX2 CI PASS / TARGET RETEST PENDING**.
 
-X/Y/Z не считаются ошибкой: R0 принудительно использует `JOY_SUPPORT_3BTN`, а 6-button input не входит в scope R0.
-
-Итог: **R0 полностью ACCEPTED и больше не блокирует R1**.
-
-## 3. Текущий milestone — R1 Core / State Machine — FUNCTIONAL TARGET PASS / CLEANUP RETEST PENDING
-
-R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
-
-### Scope
+R1 scope:
 
 - BOOT;
 - TITLE;
@@ -56,109 +40,98 @@ R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 - 3-button input abstraction;
 - NTSC/PAL timing;
 - debug/error layer;
-- clean state enter/leave hooks;
-- resource bank load/unload API.
-
-### Реализация
-
-`sgdk/src/main.c` — clean SGDK R1 core-shell без старого DEV-кода и без Granada assets/code.
-
-В нём:
-
-- явный `GameState`;
-- явный `ResourceBank`;
-- `InputState { held, pressed, released }`;
-- `JOY_SUPPORT_3BTN`;
-- 60 Hz logical clock с PAL compensation;
 - state enter/leave hooks;
-- bank unload очищает BG_A/B, WINDOW, scroll, CRAM и VDP sprites;
-- palette/sprite self-checks;
-- debug overlay;
-- встроенный 100-transition soak по кнопке C.
+- ResourceBank load/unload API;
+- 100-transition soak.
 
-## 4. Первый target-тест R1
+R2 art/gameplay не входят в R1.
 
-Пользователь запустил первый R1 ROM в MD Emu Games Gen и сообщил: **«Отлично работает»**. На предоставленных screenshots TEST_BATTLE и GARAGE визуально работают и переключение state/bank происходит корректно.
+## 4. Что пользователь уже подтвердил по R1
 
-Однако debug overlay выявил формальный gate defect:
+В MD Emu Games Gen функционально работают:
 
-- TEST_BATTLE: `TRANS:003 ERR:03`, `LAST ERROR: PALETTE_RESIDUE`;
-- GARAGE: `TRANS:005 ERR:05`, `LAST ERROR: PALETTE_RESIDUE`.
+- MAIN_MENU navigation;
+- вход в TEST_BATTLE;
+- возврат B;
+- вход в GARAGE;
+- возврат B;
+- state/bank switching;
+- rendering без видимого crash/corruption.
 
-То есть функциональная часть R1 прошла, но R1 нельзя было закрыть: gate требует `ERR:00` и отсутствие palette residue.
+Но два target test выявили внутренний `PALETTE_RESIDUE` self-check.
 
-Подробная фиксация: `tests/r1/R1_TARGET_TEST_2026-09-08.md`.
+### Исходный R1
 
-## 5. R1 CRAM cleanup fix
+- TEST_BATTLE: `TRANS:003 ERR:03`;
+- GARAGE: `TRANS:005 ERR:05`.
 
-Причина: после CPU-записи CRAM код немедленно переключал VDP на CRAM readback без явного ожидания опустошения FIFO. На target emulator это давало ложный `PALETTE_RESIDUE` на каждом state unload.
+### FIX1
 
-Исправлено:
+После FIFO-drain исправления defect сохранился:
 
-- единая очистка всех 64 CRAM entries через `PAL_setColors(0, palette_black, 64, CPU)`;
-- `VDP_waitFIFOEmpty()` после записи;
-- дополнительный `VDP_waitFIFOEmpty()` перед `PAL_getColors()`.
+- TEST_BATTLE: `TRANS:007 ERR:07`;
+- GARAGE: `TRANS:009 ERR:09`.
 
-Fix commit: `16ea3ccad96b51e0514e88076ee6c4f00b752098`.
+Значит проблема была не в пользовательском управлении и не в видимой картинке. Ненадёжной была сама CRAM cleanup/readback транзакция при active display.
 
-### CI fix build
+Полная история: `tests/r1/R1_TARGET_TEST_2026-09-08.md`.
 
-GitHub Actions run: `34177478564` — **SUCCESS**.
+## 5. FIX2
 
+Source commit: `bc858a619de76a1f5c3112859914ea132e9bf7be`.
+
+State transition теперь выполняется как blanked video transaction:
+
+1. `VDP_setEnable(FALSE)`;
+2. FIFO drain;
+3. state leave;
+4. BG_A/B/WINDOW + scroll + VDP sprites teardown;
+5. all 64 CRAM entries → black;
+6. CRAM readback with interrupts masked;
+7. next bank load + state draw;
+8. FIFO drain;
+9. `VDP_setEnable(TRUE)`.
+
+Это соответствует SGDK-подходу к безопасным крупным video-memory reset operations: не пытаться проверять CRAM во время active visible scanout.
+
+### FIX2 CI
+
+GitHub Actions run `34178302167` — **SUCCESS**.
+
+- source contract: PASS;
 - build A/B: PASS;
 - byte-for-byte reproducibility: PASS;
-- independent ROM audit: PASS;
+- independent ROM verifier: PASS;
 - ROM size: `131072` bytes;
-- ROM SHA-256: `0798b55ea287dc991a896ae67c94d1afa8640a50f85366ab765809ff316cc713`;
-- header checksum: `0x8B8E`;
-- required checksum: `0x8B8E`;
-- SGDK full-ROM XOR-fold: `0x0000`;
-- artifact: `Modern_Tanks_R1_Core_Menu`.
+- SHA-256: `78f73ba4ccabbca43433735538123de82b0097be9cb2dd5f7704838b103552c7`;
+- header checksum: `0xAC94`;
+- required checksum: `0xAC94`;
+- full-ROM XOR-fold: `0x0000`.
 
-## 6. Soak gate / следующий target-test
+## 6. Следующий обязательный target test
 
-Кнопка C в MAIN_MENU запускает 100 переходов — 25 циклов:
+Проверить только FIX2 ROM.
 
-`MENU → TEST_BATTLE → MENU → GARAGE → MENU`
+Сначала несколько ручных переходов:
 
-Обязательный итог нового ROM:
+`MAIN_MENU → TEST_BATTLE → MAIN_MENU → GARAGE → MAIN_MENU`.
+
+`ERR` должен оставаться `00`.
+
+Затем C в MAIN_MENU запускает 100-transition soak. Обязательный финал:
 
 - `SOAK: PASS 100/100`;
 - `ERR:00`;
 - `STATE: MAIN_MENU`;
 - `BANK: MENU`;
-- ручной input продолжает работать после soak.
+- manual input продолжает работать.
 
-До подтверждения этого результата R1 остаётся **TARGET RETEST PENDING**.
+До этого R1 **НЕ ACCEPTED**.
 
-## 7. Что намеренно НЕ входит в R1
+## 7. Что не трогать
 
-- финальная графика меню из `MAIN_MENU_REFERENCE.png`;
-- battlefield renderer/HUD;
-- tank art;
-- region/world tiles;
-- gameplay/AI/projectiles;
-- SRAM;
-- audio.
-
-Это последующие стадии. Scope R1 не расширять.
-
-## 8. Visual references — LOCKED
-
-Исходные SHA-256:
-
-- `COMBAT_REFERENCE.png`: `57985349c3c0eec4c1118ce35988a52181ba6357f24a61a44b6b46721db4d9b5`
-- `MAIN_MENU_REFERENCE.png`: `af049be579c56dde8b9239cb1fff11a705167957e17315528fe44d2965592360`
-- `TANKS_DETAILED_REFERENCE.png`: `5956e18e6b5d994ec730a37109e8fabd7aec158dd0f71c811a75735947ab07d7`
-
-Они не изменялись.
-
-## 9. Granada
-
-`external_reference/Granada (JU) (REV01) [T+Rus Pirate].zip` используется только как технический ориентир: startup discipline, state/resource paging, VRAM discipline, top-down readability. Никакие Granada assets/code/game rules в Modern Tanks не переносятся.
-
-## 10. Текущий запрет
-
-**R2 НЕ НАЧИНАТЬ.**
-
-Сначала пользователь должен повторно проверить fix ROM в MD Emu Games Gen и подтвердить `ERR:00` + `SOAK: PASS 100/100`. Только после прямого target PASS R1 может быть ACCEPTED/CLOSED.
+- три PNG reference — LOCKED;
+- `design/GAME_DESIGN_FROZEN.md` — не менять смысл игры;
+- Granada — только technical reference;
+- старый DEV — запрещён;
+- R2 — не начинать до clean R1 target PASS.
