@@ -1,4 +1,4 @@
-name: R2 Sharp Full-Field Main Menu SGDK CI
+name: R2 Animated Main Menu SGDK CI
 
 on:
   workflow_dispatch:
@@ -11,81 +11,63 @@ jobs:
   build-r2:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore exact approved R2 assets
+      - name: Verify direct R2 assets
         shell: bash
         run: |
           set -euo pipefail
-          python3 sgdk/tools/restore_r2_assets.py
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
           python3 - <<'PY'
           from PIL import Image
-          import hashlib
           from pathlib import Path
+          import hashlib
+
+          root=Path('sgdk/res')
           exp={
             'r2_menu_bg.png':('2e8630affb921321a26d0e2f893409cbd23124ac874fda2377cd321a4336cf29',(320,224)),
+            'r2_top_right_patch.png':('a065051b471ebaf7d17d2e42ef4a2c1b683117e5fbc25aab9037bbbb2b023bf5',(88,56)),
             'r2_selector.png':('36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd',(144,16)),
+            'r2_river_0.png':('8d64f434b735fd1a0524c81343177a4090bfbe2099dc3ea2de1aa4fc264e32e9',(112,224)),
+            'r2_river_1.png':('938b39af9d6daa8c1c334295e26be85389193e5a0fab5111cc81ac14a65a4bca',(112,224)),
+            'r2_river_2.png':('7f9466988cd80b1e23996c58f906b8c296a2288ece733c01c60cb04255568ca9',(112,224)),
+            'r2_river_3.png':('7494366afa1050ec00dad8197f094422a848032fd3e69fd2279b377b31f8edda',(112,224)),
+            'r2_flag_left_0.png':('9047d555e3abf9b3a4907d5489c75e4ab295503468f01c82abc84f2d5aca6bd4',(32,32)),
+            'r2_flag_left_1.png':('577cce63795acf10d2914eb20ba4e7d2b85cd4ffe84767c617674a1c076658aa',(32,32)),
+            'r2_flag_left_2.png':('a9592b1e93e1c4eeca390d2bf7a4728b16dfdb746ec87075cacdeb4770e9c191',(32,32)),
+            'r2_flag_left_3.png':('a7b8f8d10b14bc1be7fed74cb07aafbdccf6b2fa4c8b509fbc83c1be8e1a5539',(32,32)),
+            'r2_flag_right_0.png':('91be5ee35024f9f646d8a87ce9626c6e0165323cc8e61b75323649017a8898bd',(32,40)),
+            'r2_flag_right_1.png':('1f081beed369d1dad30bb14fc7f71240694cf3c2a8d1657a8b154d915820918d',(32,40)),
+            'r2_flag_right_2.png':('7ec98e71e78bcaa1c8084725db79b54a6331cac7d269f144b19dd66ceafc4a24',(32,40)),
+            'r2_flag_right_3.png':('5aad5c5cb0bd5d1427d2371c8a1c89495273df0db966ef9cfeab2513eee4f053',(32,40)),
+            'r2_fire_0.png':('0188b1fc93d759866addf9c9b072da5d5df7ad17f4cffc2efb3ca60783fc6c21',(32,40)),
+            'r2_fire_1.png':('35a2c54bc5230a7b03b2d7b52a7cd182b75f0922f05c7d2540c9c36badcb14f8',(32,40)),
+            'r2_fire_2.png':('212e17193da71a49d6ddb4aa9faa0c65080141f6185f17b26e770b0b91f4fcaa',(32,40)),
+            'r2_fire_3.png':('095091a93ab1d2a7b32801606eff0062554b4f6f1fc9ca4838a338cbb5562ae8',(32,40)),
           }
-          root=Path('sgdk/res')
+
           for name,(sha,size) in exp.items():
-            p=root/name; data=p.read_bytes()
-            assert hashlib.sha256(data).hexdigest()==sha
-            im=Image.open(p); im.load()
-            assert im.mode=='P' and im.size==size, (name,im.mode,im.size)
-          bg=Image.open(root/'r2_menu_bg.png'); bg.load()
-          use=[0,0,0,0]
-          for ty in range(0,224,8):
-            for tx in range(0,320,8):
-              banks={((bg.getpixel((x,y))>>4)&3) for y in range(ty,ty+8) for x in range(tx,tx+8)}
-              assert len(banks)==1,(tx,ty,banks)
-              use[next(iter(banks))]+=1
+              p=root/name
+              assert p.is_file(), name
+              data=p.read_bytes()
+              assert hashlib.sha256(data).hexdigest()==sha, name
+              im=Image.open(p); im.load()
+              assert im.mode=='P' and im.size==size, (name,im.mode,im.size)
+              for ty in range(0,im.height,8):
+                  for tx in range(0,im.width,8):
+                      banks={((im.getpixel((x,y))>>4)&3) for y in range(ty,ty+8) for x in range(tx,tx+8)}
+                      assert len(banks)==1,(name,tx,ty,banks)
+
           sel=Image.open(root/'r2_selector.png'); sel.load()
-          assert all(((v>>4)&3)==0 for v in sel.getdata())
-          assert 15 in set(sel.getdata())
-          assert 15 not in set(bg.getdata()), 'PAL0 index 15 is reserved for selector pulse'
-          print('R2 sharp graphics PASS; palette tile use',use)
+          assert set(sel.getdata()) == {0,15}
+          print('R2 direct animated assets PASS:',len(exp),'PNGs')
           PY
           mkdir -p sgdk/out
-          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
-
-      - name: Persist verified PNG binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png; then
-            echo 'Direct R2 PNG binaries already match repository.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png
-            git commit -m 'Store exact approved R2 PNGs as binary blobs [skip ci]'
-            git push origin HEAD:main
-          fi
-
-      - name: Audit tile use
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from PIL import Image
-          from pathlib import Path
-          def uniq(path):
-            im=Image.open(path); im.load(); s=set()
-            for y in range(0,im.height,8):
-              for x in range(0,im.width,8):
-                s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
-            return len(s)
-          bg=uniq('sgdk/res/r2_menu_bg.png')
-          sel=uniq('sgdk/res/r2_selector.png')
-          Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-            f'# R2 sharp full-field graphics audit\n\n- Background unique 8x8 indexed tiles: **{bg}**.\n- Selector unique tiles: **{sel}**.\n- Raw patterns before ResComp duplicate/flip savings: **{(bg+sel)*32} bytes**.\n- Artificial project graphics ceiling: **none**.\n- Runtime guards actual SGDK TILE_USER_MAX_INDEX.\n',encoding='utf-8')
-          print('tiles',bg,sel)
-          PY
+          sha256sum sgdk/res/r2_*.png > sgdk/out/R2_RESOURCE_SHA256.txt
 
       - name: Verify R2 source contract
         shell: bash
@@ -95,13 +77,12 @@ jobs:
           from pathlib import Path
           src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
           res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
-          for token in ('Final Main Menu Visual Target','JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX'):
+          for token in ('JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX','R2_ANIM_FRAMES 4','apply_enhanced_menu_palette','r2_top_right_patch','r2_river_3','r2_flag_right_3','r2_fire_3'):
               assert token in src, token
-          for token in ('IMAGE r2_menu_bg','IMAGE r2_selector'):
+          for token in ('IMAGE r2_menu_bg','IMAGE r2_top_right_patch','IMAGE r2_river_3','IMAGE r2_flag_left_3','IMAGE r2_flag_right_3','IMAGE r2_fire_3'):
               assert token in res, token
-          for bad in ('DEV149','DEV150','DEV151','opcode.emitter'):
-              assert bad.lower() not in src.lower(), bad
-          print('R2 source contract PASS')
+          assert 'restore_r2_assets.py' not in Path('.github/workflows/r0-build.yml').read_text(encoding='utf-8')
+          print('R2 animated source contract PASS')
           PY
 
       - name: Pin SGDK 2.11
@@ -126,6 +107,7 @@ jobs:
 
       - name: Build A
         run: docker run --rm -v /tmp/sgdk-r2-a:/m68k "$SGDK_IMAGE_ID"
+
       - name: Build B
         run: docker run --rm -v /tmp/sgdk-r2-b:/m68k "$SGDK_IMAGE_ID"
 
@@ -149,34 +131,33 @@ jobs:
           ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
           if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — Sharp Full-Field Candidate
+          # Modern Tanks R2 — Animated Menu Candidate
           - Commit: ${GITHUB_SHA}
           - SGDK: 2.11 pinned container
           - ROM size: ${ROM_SIZE}
           - ROM SHA-256: ${ROM_SHA}
           - Native presentation: 320x224
-          - Graphics: approved battlefield fitted to show substantially more of the field, with native-resolution crisp menu typography
-          - Menu: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ
-          - Lower tank/stat/minimap strip: removed
-          - Decorative moving tank: removed
+          - Russian menu typography: retained
+          - Top-right minimap: removed
+          - River: 4-frame downward flow
+          - Flags: 4-frame wind animation, left and right
+          - Fire: 4-frame burning animation
+          - Battlefield palette: enhanced contrast/saturation
           - R1 core: preserved
           - R3 gameplay: not started
-          - Granada / old DEV assets: not embedded
           - Gate: TARGET PENDING owner emulator acceptance
           REPORT
 
-      - name: Publish R2 candidate
+      - name: Publish R2 animated candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Sharp_Full_Field_Candidate
+          name: Modern_Tanks_R2_Animated_Menu_Candidate
           path: |
             sgdk/out/rom.bin
-            sgdk/res/r2_menu_bg.png
             sgdk/out/R2_SHA256.txt
             sgdk/out/R2_ROM_AUDIT.json
             sgdk/out/R2_BUILD_REPORT.md
-            sgdk/out/R2_RESOURCE_BUDGET.md
             sgdk/out/R2_RESOURCE_SHA256.txt
             sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
             sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
