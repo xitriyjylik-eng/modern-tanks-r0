@@ -2,9 +2,9 @@
 #include "resources.h"
 
 /*
- * Modern Tanks R2 — Main Menu Visual Target / Visual Rework 1
+ * Modern Tanks R2 — Main Menu Visual Target / Focused Menu Rework
  * Clean SGDK rebuild only. R1 core is accepted and preserved.
- * No old DEV code. No Granada assets/code. Reference PNG is not embedded.
+ * No old DEV code. No Granada assets/code. Reference PNGs are not embedded.
  */
 
 typedef enum
@@ -39,7 +39,6 @@ typedef struct
 #define R2_SELECTOR_X 14
 #define R2_SELECTOR_W 13
 #define R2_SELECTOR_H 2
-#define R2_ANIM_Y 3
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -56,11 +55,7 @@ static u16 errorCount = 0;
 static const char *lastError = "NONE";
 
 static u16 selectorTileBase = 0;
-static u16 animTileBase = 0;
 static u16 selectorPulse = 0;
-static u16 animX = 2;
-static s16 animDir = 1;
-static u16 animTick = 0;
 static bool menuArtLoaded = FALSE;
 
 static const u16 selectorY[R2_MENU_COUNT] = {10, 12, 14, 16};
@@ -223,20 +218,8 @@ static void draw_menu_art(void)
 
     bgTiles = r2_menu_bg.tileset->numTile;
     selectorTileBase = TILE_USER_INDEX + bgTiles;
-    animTileBase = selectorTileBase + max_selector_tiles();
 
     draw_selector(menuIndex, menuIndex, TRUE);
-
-    animX = 2;
-    animDir = 1;
-    animTick = 0;
-    VDP_drawImageEx(BG_A,
-                    &r2_anim_tank,
-                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, animTileBase),
-                    animX,
-                    R2_ANIM_Y,
-                    FALSE,
-                    TRUE);
 
     selectorPulse = 0;
     menuArtLoaded = TRUE;
@@ -244,10 +227,9 @@ static void draw_menu_art(void)
 
 static void update_menu_visuals(void)
 {
-    u16 oldX;
-
     if (!menuArtLoaded) return;
 
+    /* Only the active menu row pulses. The decorative moving tank was removed. */
     selectorPulse++;
     if ((selectorPulse & 15) == 0)
     {
@@ -255,33 +237,6 @@ static void update_menu_visuals(void)
             PAL_setColor(45, RGB24_TO_VDPCOLOR(0xFBE049));
         else
             PAL_setColor(45, RGB24_TO_VDPCOLOR(0xC9A72F));
-    }
-
-    animTick++;
-    if (animTick >= 8)
-    {
-        animTick = 0;
-        oldX = animX;
-
-        if (animDir > 0)
-        {
-            if (animX >= 7) animDir = -1;
-            else animX++;
-        }
-        else
-        {
-            if (animX <= 2) animDir = 1;
-            else animX--;
-        }
-
-        VDP_clearTileMapRect(BG_A, oldX, R2_ANIM_Y, 2, 2);
-        VDP_drawImageEx(BG_A,
-                        &r2_anim_tank,
-                        TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, animTileBase),
-                        animX,
-                        R2_ANIM_Y,
-                        FALSE,
-                        TRUE);
     }
 }
 
