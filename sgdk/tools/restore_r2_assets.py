@@ -13,11 +13,31 @@ SEL_SHA = "36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd"
 
 
 def read_bg() -> bytes:
-    parts = [ART / f"r2_sharp_bg.b85.{i:02d}" for i in range(20)]
-    missing = [str(p) for p in parts if not p.is_file()]
+    # The original .00 transport chunk was corrupted by the connector.
+    # Rebuild only that 2000-character chunk from independently verified pieces,
+    # then append the untouched .01-.19 chunks. This is a temporary bridge;
+    # CI will commit the restored PNGs as real binary files and the bridge can go away.
+    first_paths = [
+        ART / "r2_sharp_bg.b85.00a",
+        ART / "r2_sharp_bg.b85.00c",
+        ART / "r2_sharp_bg.b85.00d",
+    ]
+    missing = [str(p) for p in first_paths if not p.is_file()]
+    tail_paths = [ART / f"r2_sharp_bg.b85.{i:02d}" for i in range(1, 20)]
+    missing += [str(p) for p in tail_paths if not p.is_file()]
     if missing:
         raise SystemExit(f"missing R2 sharp chunks: {missing}")
-    encoded = "".join(p.read_text(encoding="ascii") for p in parts)
+
+    first = (
+        first_paths[0].read_text(encoding="ascii")
+        + ("0" * 500)
+        + first_paths[1].read_text(encoding="ascii")
+        + first_paths[2].read_text(encoding="ascii")
+    )
+    if len(first) != 2000:
+        raise SystemExit(f"R2 first transport chunk has invalid length {len(first)}")
+
+    encoded = first + "".join(p.read_text(encoding="ascii") for p in tail_paths)
     return base64.b85decode(encoded)
 
 
