@@ -20,3 +20,5 @@ Plane tables, SGDK system/font reservations and other VDP tables are separate fr
 - worst moving overlay update: 4 tiles / 128 bytes plus a 2×2 tilemap update every 8 logic ticks.
 - selected row redraw: at most 28 unique tiles / 896 bytes plus 17×2 tilemap cells, only on menu navigation.
 - full menu image is loaded only on `MAIN_MENU` entry, never every frame.
+
+CI trigger note: this file is part of the R2 `sgdk/**` source contract and its normal contents update intentionally triggers the R2 GitHub Actions build after the atomic R2 tree commit.
