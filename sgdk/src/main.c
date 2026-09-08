@@ -2,9 +2,8 @@
 
 /*
  * Modern Tanks R1 — Core / State Machine
- *
- * Clean SGDK rebuild line only. No DEV code, no Granada assets/code.
- * R1 is intentionally a diagnostic shell: R2 owns final menu visuals.
+ * Clean SGDK rebuild only. No DEV code and no Granada assets/code.
+ * R1 is a diagnostic core shell; final menu visuals belong to R2.
  */
 
 typedef enum
@@ -52,12 +51,13 @@ static u16 bankGeneration = 0;
 static u16 errorCount = 0;
 static u16 stateEnterCount[STATE_COUNT];
 static u16 stateLeaveCount[STATE_COUNT];
+static u16 lastBadColorIndex = 0;
+static u16 lastBadColorValue = 0;
 
 static bool soakActive = FALSE;
 static bool soakPassed = FALSE;
 static u16 soakTransitions = 0;
 static u16 soakStepTicks = 0;
-
 static const char *lastError = "NONE";
 
 static const char *state_name(GameState state)
@@ -91,16 +91,11 @@ static ResourceBank state_bank(GameState state)
     switch (state)
     {
         case STATE_BOOT:
-        case STATE_TITLE:
-            return BANK_CORE;
-        case STATE_MAIN_MENU:
-            return BANK_MENU;
-        case STATE_TEST_BATTLE:
-            return BANK_BATTLE_SHELL;
-        case STATE_GARAGE:
-            return BANK_GARAGE_SHELL;
-        default:
-            return BANK_NONE;
+        case STATE_TITLE: return BANK_CORE;
+        case STATE_MAIN_MENU: return BANK_MENU;
+        case STATE_TEST_BATTLE: return BANK_BATTLE_SHELL;
+        case STATE_GARAGE: return BANK_GARAGE_SHELL;
+        default: return BANK_NONE;
     }
 }
 
@@ -110,14 +105,16 @@ static void set_error(const char *code)
     lastError = code;
 }
 
+/*
+ * CRAM ownership rule for R1:
+ * - state transitions run with display disabled;
+ * - all 64 colors are cleared in one contiguous CPU transfer;
+ * - FIFO is drained before CRAM readback;
+ * - interrupts are masked during the readback exactly to avoid VDP command-port
+ *   interference while PAL_getColors() owns the VDP read command.
+ */
 static void clear_all_palettes(void)
 {
-    /*
-     * palette_black is SGDK's 64-entry all-black CRAM source.
-     * Use one contiguous CPU write, then explicitly drain the VDP FIFO before
-     * any readback. Immediate CRAM readback after FIFO-backed writes can see
-     * stale values on Mega Drive timing/emulator implementations.
-     */
     PAL_setColors(0, palette_black, 64, CPU);
     VDP_waitFIFOEmpty();
 }
@@ -127,21 +124,29 @@ static bool palettes_are_black(void)
     u16 colors[64];
     u16 i;
 
-    /* Ensure every earlier CRAM write is committed before changing the VDP
-     * command port to CRAM-read mode. */
     VDP_waitFIFOEmpty();
+    SYS_disableInts();
     PAL_getColors(0, colors, 64);
+    SYS_enableInts();
 
     for (i = 0; i < 64; i++)
     {
-        if (colors[i] != 0) return FALSE;
+        if (colors[i] != 0)
+        {
+            lastBadColorIndex = i;
+            lastBadColorValue = colors[i];
+            return FALSE;
+        }
     }
+
+    lastBadColorIndex = 0;
+    lastBadColorValue = 0;
     return TRUE;
 }
 
 static void resource_bank_unload(void)
 {
-    /* R1 cleanup contract: no state-owned plane, palette or VDP sprite survives. */
+    /* Caller keeps the VDP display disabled while this cleanup runs. */
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
     VDP_clearPlane(WINDOW, TRUE);
@@ -171,7 +176,7 @@ static void resource_bank_load(ResourceBank bank)
         resource_bank_unload();
     }
 
-    /* Built-in SGDK font only in R1. Real art banks start at R2/R3. */
+    /* Built-in SGDK font only. Real project art banks start after R1. */
     PAL_setPalette(PAL0, palette_grey, CPU);
 
     switch (bank)
@@ -184,6 +189,7 @@ static void resource_bank_load(ResourceBank bank)
     }
 
     PAL_setColor(0, RGB24_TO_VDPCOLOR(backdrop));
+    VDP_waitFIFOEmpty();
     activeBank = bank;
     bankGeneration++;
 }
@@ -345,10 +351,21 @@ static void change_state(GameState next)
         return;
     }
 
+    /*
+     * State-bank teardown/setup is a blanking transaction. This makes CRAM,
+     * VRAM and sprite cleanup deterministic instead of trying to prove CRAM
+     * state while the VDP is actively scanning the visible frame.
+     */
+    VDP_setEnable(FALSE);
+    VDP_waitFIFOEmpty();
+
     state_leave(currentState);
     currentState = next;
     transitionCount++;
     state_enter(currentState);
+
+    VDP_waitFIFOEmpty();
+    VDP_setEnable(TRUE);
 }
 
 static void input_poll(void)
@@ -474,24 +491,26 @@ int main(bool hardReset)
     VDP_setTextPriority(TRUE);
 
     JOY_setSupport(PORT_1, JOY_SUPPORT_3BTN);
-
     videoHz = SYS_isPAL() ? 50 : 60;
+
     for (i = 0; i < STATE_COUNT; i++)
     {
         stateEnterCount[i] = 0;
         stateLeaveCount[i] = 0;
     }
 
+    /* First bank setup follows the same blanked transaction rule as transitions. */
+    VDP_setEnable(FALSE);
     clear_all_palettes();
     VDP_resetSprites();
     VDP_updateSprites(0, CPU);
-
     previousPad = JOY_readJoypad(JOY_1);
     state_enter(STATE_BOOT);
+    VDP_waitFIFOEmpty();
+    VDP_setEnable(TRUE);
 
     while (TRUE)
     {
-        /* SGDK owns VBlank and controller polling. */
         SYS_doVBlankProcess();
         input_poll();
         handle_input_frame();
