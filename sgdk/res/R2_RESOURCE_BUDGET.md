@@ -1,24 +1,32 @@
-# R2 resource budget
+# R2 resource budget — Visual Rework 1
 
-Generated art is original R2 project art derived from the composition goals of `MAIN_MENU_REFERENCE.png`; the locked reference PNG itself is not embedded, resized, altered or copied into the ROM.
+The runtime artwork is original project-owned pixel art generated directly at **320×224**. The locked `MAIN_MENU_REFERENCE.png` is a visual/composition target only: it is not embedded, resized, modified, or used as a ROM asset. Granada assets/code are not used.
 
-The six R2 indexed PNG resources share one 4×16-color Mega Drive palette plan. `rescomp` uses tile-level palette selection and `ALL` duplicate/flip optimisation.
+The six generated indexed PNG resources use a four-palette Mega Drive plan. Each 8×8 tile is normalized to one 16-color palette before SGDK ResComp processes it.
 
-## Project-owned tile payload
+## Conservative project-owned pattern payload
 
-- `r2_menu_bg.png`: 412 unique tiles = 13,184 bytes.
-- selected row resources: 19 / 20 / 28 / 26 tiles; only one is resident at a time, worst = 28 tiles = 896 bytes.
-- `r2_anim_tank.png`: 4 tiles = 128 bytes.
-- worst simultaneous R2 menu art: **444 tiles = 14,208 bytes** of project-owned pattern data.
-- conservative 44 KiB pattern-budget comparison: **30,848 bytes free**.
+Raw unique-tile analysis before ResComp duplicate/flip optimization:
 
-Plane tables, SGDK system/font reservations and other VDP tables are separate from this project-owned pattern figure. R2 intentionally stays far below the conservative 44 KiB project pattern ceiling so later stages are not forced to inherit an overpacked menu bank.
+- `r2_menu_bg.png`: **628 unique 8×8 tiles** maximum = 20,096 bytes.
+- selected-row overlays: 22 / 20 / 26 / 26 raw unique tiles; only one selector is resident at a time, conservative worst = **26 tiles = 832 bytes**.
+- `r2_anim_tank.png`: **4 tiles = 128 bytes**.
+- conservative simultaneous upper bound: **658 tiles = 21,056 bytes**.
+- against a conservative 44 KiB project pattern ceiling (45,056 bytes): **at least 24,000 bytes remain free** before ResComp duplicate/flip savings.
 
-## Sprites / DMA
+This is deliberately conservative. SGDK ResComp may reduce the actual tile payload through duplicate and flip optimization; the acceptance decision does not depend on optimistic compression.
 
-- SGDK sprite engine payload in R2 menu: 0 project sprites; the scripted tank is a 2×2-tile Plane A overlay.
-- worst moving overlay update: 4 tiles / 128 bytes plus a 2×2 tilemap update every 8 logic ticks.
-- selected row redraw: at most 28 unique tiles / 896 bytes plus 17×2 tilemap cells, only on menu navigation.
-- full menu image is loaded only on `MAIN_MENU` entry, never every frame.
+Plane tables, SGDK font/system reservations, and other VDP structures are separate from this project-owned pattern estimate.
 
-CI trigger note: this file is part of the R2 `sgdk/**` source contract and its normal contents update intentionally triggers the R2 GitHub Actions build after the atomic R2 tree commit.
+## Sprites / recurring transfer
+
+- Project VDP sprite-engine payload in the R2 menu: **0 sprites**. The scripted background tank is a 2×2 Plane A overlay.
+- Moving overlay update: 4 tiles / 128 bytes plus a 2×2 tilemap update every 8 logic ticks.
+- Selector overlay: 104×16 = 13×2 tile cells; it is redrawn only on navigation.
+- Full 320×224 menu image is loaded only on `MAIN_MENU` entry, never every frame.
+
+## Visual density added in Visual Rework 1
+
+The increased budget is intentional and funds the features missing in the first R2 candidate: winding river/shoreline, forest clusters, bridges, brick/steel fortifications, craters/debris, multiple battlefield tanks, shell traces, explosions/smoke, dimensional logo frame, narrower reference-like menu composition, detailed T-1..T-4 silhouettes, segmented parameter bars, and a more informative minimap.
+
+R3 assets remain excluded. R2 stays a standalone menu bank and must still unload cleanly when entering TEST_BATTLE or GARAGE.
