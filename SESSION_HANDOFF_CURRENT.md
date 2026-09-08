@@ -17,8 +17,6 @@ R0 закрыт 2026-09-08 прямым решением владельца пр
 
 ### CI
 
-Успешный SGDK build:
-
 - GitHub Actions run: `34175976629`;
 - commit: `10bd881926743a88c8a211919b176505cc95054c`;
 - ROM size: `131072` bytes;
@@ -43,11 +41,11 @@ X/Y/Z не считаются ошибкой: R0 принудительно ис
 
 Итог: **R0 полностью ACCEPTED и больше не блокирует R1**.
 
-## 3. Текущий milestone — R1 Core / State Machine — BUILD/CI PASS / TARGET PENDING
+## 3. Текущий milestone — R1 Core / State Machine — FUNCTIONAL TARGET PASS / CLEANUP RETEST PENDING
 
 R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 
-### Требуемый scope
+### Scope
 
 - BOOT;
 - TITLE;
@@ -61,9 +59,9 @@ R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 - clean state enter/leave hooks;
 - resource bank load/unload API.
 
-### Реализация текущего source
+### Реализация
 
-`sgdk/src/main.c` переписан с R0 probe на R1 core-shell без использования старого DEV-кода.
+`sgdk/src/main.c` — clean SGDK R1 core-shell без старого DEV-кода и без Granada assets/code.
 
 В нём:
 
@@ -71,27 +69,69 @@ R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 - явный `ResourceBank`;
 - `InputState { held, pressed, released }`;
 - `JOY_SUPPORT_3BTN`;
-- 60 Hz logical clock; на PAL 50 Hz логика компенсируется до той же реальной скорости;
+- 60 Hz logical clock с PAL compensation;
 - state enter/leave hooks;
 - bank unload очищает BG_A/B, WINDOW, scroll, CRAM и VDP sprites;
-- внутренние проверки palette residue и sprite leak;
-- debug overlay с state/bank/videoHz/transition/error counters;
-- встроенный автоматический soak по кнопке C в MAIN MENU.
+- palette/sprite self-checks;
+- debug overlay;
+- встроенный 100-transition soak по кнопке C.
 
-### Soak gate
+## 4. Первый target-тест R1
 
-Кнопка C запускает 100 переходов — 25 циклов:
+Пользователь запустил первый R1 ROM в MD Emu Games Gen и сообщил: **«Отлично работает»**. На предоставленных screenshots TEST_BATTLE и GARAGE визуально работают и переключение state/bank происходит корректно.
+
+Однако debug overlay выявил формальный gate defect:
+
+- TEST_BATTLE: `TRANS:003 ERR:03`, `LAST ERROR: PALETTE_RESIDUE`;
+- GARAGE: `TRANS:005 ERR:05`, `LAST ERROR: PALETTE_RESIDUE`.
+
+То есть функциональная часть R1 прошла, но R1 нельзя было закрыть: gate требует `ERR:00` и отсутствие palette residue.
+
+Подробная фиксация: `tests/r1/R1_TARGET_TEST_2026-09-08.md`.
+
+## 5. R1 CRAM cleanup fix
+
+Причина: после CPU-записи CRAM код немедленно переключал VDP на CRAM readback без явного ожидания опустошения FIFO. На target emulator это давало ложный `PALETTE_RESIDUE` на каждом state unload.
+
+Исправлено:
+
+- единая очистка всех 64 CRAM entries через `PAL_setColors(0, palette_black, 64, CPU)`;
+- `VDP_waitFIFOEmpty()` после записи;
+- дополнительный `VDP_waitFIFOEmpty()` перед `PAL_getColors()`.
+
+Fix commit: `16ea3ccad96b51e0514e88076ee6c4f00b752098`.
+
+### CI fix build
+
+GitHub Actions run: `34177478564` — **SUCCESS**.
+
+- build A/B: PASS;
+- byte-for-byte reproducibility: PASS;
+- independent ROM audit: PASS;
+- ROM size: `131072` bytes;
+- ROM SHA-256: `0798b55ea287dc991a896ae67c94d1afa8640a50f85366ab765809ff316cc713`;
+- header checksum: `0x8B8E`;
+- required checksum: `0x8B8E`;
+- SGDK full-ROM XOR-fold: `0x0000`;
+- artifact: `Modern_Tanks_R1_Core_Menu`.
+
+## 6. Soak gate / следующий target-test
+
+Кнопка C в MAIN_MENU запускает 100 переходов — 25 циклов:
 
 `MENU → TEST_BATTLE → MENU → GARAGE → MENU`
 
-Ожидаемый итог:
+Обязательный итог нового ROM:
 
 - `SOAK: PASS 100/100`;
-- `ERR: 00`;
+- `ERR:00`;
 - `STATE: MAIN_MENU`;
-- `BANK: MENU`.
+- `BANK: MENU`;
+- ручной input продолжает работать после soak.
 
-## 4. Что намеренно НЕ входит в R1
+До подтверждения этого результата R1 остаётся **TARGET RETEST PENDING**.
+
+## 7. Что намеренно НЕ входит в R1
 
 - финальная графика меню из `MAIN_MENU_REFERENCE.png`;
 - battlefield renderer/HUD;
@@ -101,9 +141,9 @@ R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 - SRAM;
 - audio.
 
-Это последующие стадии. Не расширять scope R1 только потому, что ROM компилируется.
+Это последующие стадии. Scope R1 не расширять.
 
-## 5. Visual references — LOCKED
+## 8. Visual references — LOCKED
 
 Исходные SHA-256:
 
@@ -111,40 +151,14 @@ R1 реализуется строго по `plan/REBUILD_MASTER_PLAN.md`.
 - `MAIN_MENU_REFERENCE.png`: `af049be579c56dde8b9239cb1fff11a705167957e17315528fe44d2965592360`
 - `TANKS_DETAILED_REFERENCE.png`: `5956e18e6b5d994ec730a37109e8fabd7aec158dd0f71c811a75735947ab07d7`
 
-Они не изменялись при переходе R0 → R1.
+Они не изменялись.
 
-## 6. Granada
+## 9. Granada
 
-`external_reference/Granada (JU) (REV01) [T+Rus Pirate].zip` содержит один 524288-byte ROM с SHA-256 `bebebce4f157c3c46d9fe1a85f336cb218aad8ae5dc29c1d454aab9c0f460889`.
+`external_reference/Granada (JU) (REV01) [T+Rus Pirate].zip` используется только как технический ориентир: startup discipline, state/resource paging, VRAM discipline, top-down readability. Никакие Granada assets/code/game rules в Modern Tanks не переносятся.
 
-Он изучается только как технический ориентир: startup discipline, state/resource paging, VRAM discipline, top-down readability. Никакие его assets/code/game rules в Modern Tanks не переносятся.
+## 10. Текущий запрет
 
-## 7. GitHub / R1 CI
+**R2 НЕ НАЧИНАТЬ.**
 
-Repository: `xitriyjylik-eng/modern-tanks-r0`.
-
-Write/admin access подтверждён. R1 source зафиксирован и реально собран через GitHub Actions.
-
-- R1 source commit: `d348e0518bfe74d47da6db705313e4a26c0fc891`;
-- R1 GitHub Actions run: `34176727527`;
-- job `build-r1`: SUCCESS;
-- две независимые clean SGDK 2.11 сборки совпали byte-for-byte;
-- ROM size: `131072` bytes;
-- ROM SHA-256: `4fdc8d3d8ef9f723caf228b61f183b1fea927bee93727028f6e0a414cf6a726a`;
-- header checksum: `0xF22B`;
-- required checksum: `0xF22B`;
-- SGDK full-ROM XOR-fold: `0x0000`;
-- independent ROM audit: PASS;
-- CI artifact: `Modern_Tanks_R1_Core_Menu`;
-- exact Docker image digest: `sha256:327ab838fbdf6bc741c6a7a11ee3c937cf1aaf1dc07a475995e89b741b6a830d`;
-- exact image ID: `sha256:e66837c905b7878e02ecfce1e3b906856dad5d751789c29b97555798f6b66972`.
-
-Компиляция не закрывает gate: target-test R1 ещё нужен.
-
-## 8. Gate после R1 build
-
-CI часть R1 пройдена. ROM передан пользователю для MD Emu Games Gen.
-
-Ожидаемый target-result после C-soak: `SOAK: PASS 100/100`, `ERR: 00`, `STATE: MAIN_MENU`, `BANK: MENU`, после чего ручной input должен продолжать работать.
-
-**R1 пока НЕ ACCEPTED. Не переходить к R2 до прямого подтверждения пользователя, что R1 принят.**
+Сначала пользователь должен повторно проверить fix ROM в MD Emu Games Gen и подтвердить `ERR:00` + `SOAK: PASS 100/100`. Только после прямого target PASS R1 может быть ACCEPTED/CLOSED.
