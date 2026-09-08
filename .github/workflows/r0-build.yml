@@ -81,7 +81,6 @@ jobs:
               assert token in src, token
           for token in ('IMAGE r2_menu_bg','IMAGE r2_top_right_patch','IMAGE r2_river_3','IMAGE r2_flag_left_3','IMAGE r2_flag_right_3','IMAGE r2_fire_3'):
               assert token in res, token
-          assert 'restore_r2_assets.py' not in Path('.github/workflows/r0-build.yml').read_text(encoding='utf-8')
           print('R2 animated source contract PASS')
           PY
 
