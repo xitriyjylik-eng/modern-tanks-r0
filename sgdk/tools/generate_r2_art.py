@@ -22,7 +22,8 @@ def decode_text_payload(parts, out_name):
 
 
 bg_path = decode_text_payload([
-    "r2_menu_bg.png.b64.000a",
+    "r2_menu_bg.png.b64.000a0",
+    "r2_menu_bg.png.b64.000a1",
     "r2_menu_bg.png.b64.000b2",
     "r2_menu_bg.png.b64.000c",
     "r2_menu_bg.png.b64.001",
