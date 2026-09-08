@@ -1,9 +1,10 @@
 #include <genesis.h>
+#include "resources.h"
 
 /*
- * Modern Tanks R1 — Core / State Machine
- * Clean SGDK rebuild only. No DEV code and no Granada assets/code.
- * R1 is a diagnostic core shell; final menu visuals belong to R2.
+ * Modern Tanks R2 — Main Menu Visual Target
+ * Clean SGDK rebuild only. R1 core is accepted and preserved.
+ * No old DEV code. No Granada assets/code. Reference PNG is not embedded.
  */
 
 typedef enum
@@ -32,10 +33,13 @@ typedef struct
     u16 released;
 } InputState;
 
-#define R1_LOGIC_HZ 60
-#define R1_BOOT_TICKS 90
-#define R1_SOAK_TRANSITIONS 100
-#define R1_SOAK_STEP_TICKS 4
+#define R2_LOGIC_HZ 60
+#define R2_BOOT_TICKS 60
+#define R2_MENU_COUNT 4
+#define R2_SELECTOR_X 12
+#define R2_SELECTOR_W 17
+#define R2_SELECTOR_H 2
+#define R2_ANIM_Y 3
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -49,42 +53,24 @@ static u16 stateTicks = 0;
 static u16 transitionCount = 0;
 static u16 bankGeneration = 0;
 static u16 errorCount = 0;
-static u16 stateEnterCount[STATE_COUNT];
-static u16 stateLeaveCount[STATE_COUNT];
-static u16 lastBadColorIndex = 0;
-static u16 lastBadColorValue = 0;
-
-static bool soakActive = FALSE;
-static bool soakPassed = FALSE;
-static u16 soakTransitions = 0;
-static u16 soakStepTicks = 0;
 static const char *lastError = "NONE";
 
-static const char *state_name(GameState state)
-{
-    switch (state)
-    {
-        case STATE_BOOT: return "BOOT";
-        case STATE_TITLE: return "TITLE";
-        case STATE_MAIN_MENU: return "MAIN_MENU";
-        case STATE_TEST_BATTLE: return "TEST_BATTLE";
-        case STATE_GARAGE: return "GARAGE";
-        default: return "INVALID";
-    }
-}
+static u16 selectorTileBase = 0;
+static u16 animTileBase = 0;
+static u16 selectorPulse = 0;
+static u16 animX = 2;
+static s16 animDir = 1;
+static u16 animTick = 0;
+static bool menuArtLoaded = FALSE;
 
-static const char *bank_name(ResourceBank bank)
+static const u16 selectorY[R2_MENU_COUNT] = {10, 12, 14, 16};
+static const Image *selectorImages[R2_MENU_COUNT] =
 {
-    switch (bank)
-    {
-        case BANK_NONE: return "NONE";
-        case BANK_CORE: return "CORE";
-        case BANK_MENU: return "MENU";
-        case BANK_BATTLE_SHELL: return "BATTLE";
-        case BANK_GARAGE_SHELL: return "GARAGE";
-        default: return "INVALID";
-    }
-}
+    &r2_sel_0,
+    &r2_sel_1,
+    &r2_sel_2,
+    &r2_sel_3
+};
 
 static ResourceBank state_bank(GameState state)
 {
@@ -105,14 +91,6 @@ static void set_error(const char *code)
     lastError = code;
 }
 
-/*
- * CRAM ownership rule for R1:
- * - state transitions run with display disabled;
- * - all 64 colors are cleared in one contiguous CPU transfer;
- * - FIFO is drained before CRAM readback;
- * - interrupts are masked during the readback exactly to avoid VDP command-port
- *   interference while PAL_getColors() owns the VDP read command.
- */
 static void clear_all_palettes(void)
 {
     PAL_setColors(0, palette_black, 64, CPU);
@@ -130,23 +108,13 @@ static bool palettes_are_black(void)
     SYS_enableInts();
 
     for (i = 0; i < 64; i++)
-    {
-        if (colors[i] != 0)
-        {
-            lastBadColorIndex = i;
-            lastBadColorValue = colors[i];
-            return FALSE;
-        }
-    }
+        if (colors[i] != 0) return FALSE;
 
-    lastBadColorIndex = 0;
-    lastBadColorValue = 0;
     return TRUE;
 }
 
 static void resource_bank_unload(void)
 {
-    /* Caller keeps the VDP display disabled while this cleanup runs. */
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
     VDP_clearPlane(WINDOW, TRUE);
@@ -162,174 +130,191 @@ static void resource_bank_unload(void)
     if (!palettes_are_black()) set_error("PALETTE_RESIDUE");
     if (VDP_refreshHighestAllocatedSpriteIndex() != -1) set_error("SPRITE_LEAK");
 
+    menuArtLoaded = FALSE;
     activeBank = BANK_NONE;
     bankGeneration++;
 }
 
 static void resource_bank_load(ResourceBank bank)
 {
-    u32 backdrop = 0x080808;
-
     if (activeBank != BANK_NONE)
     {
         set_error("BANK_LOAD_OVERLAP");
         resource_bank_unload();
     }
 
-    /* Built-in SGDK font only. Real project art banks start after R1. */
-    PAL_setPalette(PAL0, palette_grey, CPU);
-
-    switch (bank)
-    {
-        case BANK_CORE: backdrop = 0x081018; break;
-        case BANK_MENU: backdrop = 0x081C10; break;
-        case BANK_BATTLE_SHELL: backdrop = 0x241008; break;
-        case BANK_GARAGE_SHELL: backdrop = 0x180C24; break;
-        default: backdrop = 0x200000; break;
-    }
-
-    PAL_setColor(0, RGB24_TO_VDPCOLOR(backdrop));
-    VDP_waitFIFOEmpty();
     activeBank = bank;
     bankGeneration++;
-}
 
-static void draw_number_at(u16 value, u16 x, u16 y, u16 minDigits)
-{
-    char buffer[8];
-    uintToStr(value, buffer, minDigits);
-    VDP_drawText(buffer, x, y);
-}
-
-static void draw_common_header(void)
-{
-    VDP_drawText("MODERN TANKS", 14, 1);
-    VDP_drawText("R1 CORE / STATE MACHINE", 8, 3);
-}
-
-static void draw_debug_layer(void)
-{
-    VDP_drawText("STATE:                 ", 1, 22);
-    VDP_drawText(state_name(currentState), 8, 22);
-
-    VDP_drawText("BANK:            GEN:     ", 1, 23);
-    VDP_drawText(bank_name(activeBank), 7, 23);
-    draw_number_at(bankGeneration, 24, 23, 3);
-
-    VDP_drawText("VIDEO:      HZ LOGIC:60", 1, 24);
-    draw_number_at(videoHz, 8, 24, 2);
-
-    VDP_drawText("TRANS:     ERR:     ", 1, 25);
-    draw_number_at(transitionCount, 7, 25, 3);
-    draw_number_at(errorCount, 16, 25, 2);
-
-    VDP_drawText("LAST ERROR:                   ", 1, 26);
-    VDP_drawText(lastError, 13, 26);
-
-    if (soakActive)
+    if (bank != BANK_MENU)
     {
-        VDP_drawText("SOAK:     /100 RUNNING", 1, 27);
-        draw_number_at(soakTransitions, 7, 27, 3);
+        PAL_setPalette(PAL0, palette_grey, CPU);
+        if (bank == BANK_CORE) PAL_setColor(0, RGB24_TO_VDPCOLOR(0x081018));
+        else if (bank == BANK_BATTLE_SHELL) PAL_setColor(0, RGB24_TO_VDPCOLOR(0x241008));
+        else if (bank == BANK_GARAGE_SHELL) PAL_setColor(0, RGB24_TO_VDPCOLOR(0x180C24));
+        else PAL_setColor(0, RGB24_TO_VDPCOLOR(0x100808));
+        VDP_waitFIFOEmpty();
     }
-    else if (soakPassed)
+}
+
+static u16 max_selector_tiles(void)
+{
+    u16 i;
+    u16 m = 0;
+    for (i = 0; i < R2_MENU_COUNT; i++)
+        if (selectorImages[i]->tileset->numTile > m) m = selectorImages[i]->tileset->numTile;
+    return m;
+}
+
+static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
+{
+    if (!firstDraw)
+        VDP_clearTileMapRect(BG_A, R2_SELECTOR_X, selectorY[oldIndex], R2_SELECTOR_W, R2_SELECTOR_H);
+
+    VDP_drawImageEx(BG_A,
+                    selectorImages[newIndex],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, selectorTileBase),
+                    R2_SELECTOR_X,
+                    selectorY[newIndex],
+                    FALSE,
+                    TRUE);
+}
+
+static void draw_menu_art(void)
+{
+    u16 bgTiles;
+
+    VDP_setTextPlane(BG_A);
+    VDP_setTextPriority(TRUE);
+
+    VDP_drawImageEx(BG_B,
+                    &r2_menu_bg,
+                    TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, TILE_USER_INDEX),
+                    0,
+                    0,
+                    TRUE,
+                    TRUE);
+
+    bgTiles = r2_menu_bg.tileset->numTile;
+    selectorTileBase = TILE_USER_INDEX + bgTiles;
+    animTileBase = selectorTileBase + max_selector_tiles();
+
+    draw_selector(menuIndex, menuIndex, TRUE);
+
+    animX = 2;
+    animDir = 1;
+    animTick = 0;
+    VDP_drawImageEx(BG_A,
+                    &r2_anim_tank,
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, animTileBase),
+                    animX,
+                    R2_ANIM_Y,
+                    FALSE,
+                    TRUE);
+
+    selectorPulse = 0;
+    menuArtLoaded = TRUE;
+}
+
+static void update_menu_visuals(void)
+{
+    u16 oldX;
+
+    if (!menuArtLoaded) return;
+
+    selectorPulse++;
+    if ((selectorPulse & 15) == 0)
     {
-        VDP_drawText("SOAK: PASS 100/100     ", 1, 27);
+        if (selectorPulse & 16)
+            PAL_setColor(45, RGB24_TO_VDPCOLOR(0xFBE049));
+        else
+            PAL_setColor(45, RGB24_TO_VDPCOLOR(0xC9A72F));
     }
-    else
+
+    animTick++;
+    if (animTick >= 8)
     {
-        VDP_drawText("SOAK: READY - C IN MENU", 1, 27);
+        animTick = 0;
+        oldX = animX;
+
+        if (animDir > 0)
+        {
+            if (animX >= 7) animDir = -1;
+            else animX++;
+        }
+        else
+        {
+            if (animX <= 2) animDir = 1;
+            else animX--;
+        }
+
+        VDP_clearTileMapRect(BG_A, oldX, R2_ANIM_Y, 2, 2);
+        VDP_drawImageEx(BG_A,
+                        &r2_anim_tank,
+                        TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, animTileBase),
+                        animX,
+                        R2_ANIM_Y,
+                        FALSE,
+                        TRUE);
     }
 }
 
 static void draw_boot(void)
 {
-    draw_common_header();
-    VDP_drawText("BOOT", 18, 7);
-    VDP_drawText("STANDARD SGDK STARTUP", 9, 10);
-    VDP_drawText("3-BUTTON INPUT PATH", 10, 12);
-    VDP_drawText("RESOURCE BANK API READY", 8, 14);
-    VDP_drawText("AUTO -> TITLE", 13, 18);
+    VDP_setTextPalette(PAL0);
+    VDP_drawText("MODERN TANKS", 14, 5);
+    VDP_drawText("R2 MAIN MENU VISUAL TARGET", 6, 9);
+    VDP_drawText("R1 CORE ACCEPTED", 11, 13);
+    VDP_drawText("LOADING MENU BANK...", 10, 17);
 }
 
 static void draw_title(void)
 {
-    draw_common_header();
-    VDP_drawText("TITLE SHELL", 14, 8);
-    VDP_drawText("PRESS START OR A", 11, 13);
-    VDP_drawText("R1 FUNCTIONAL SHELL ONLY", 7, 17);
-    VDP_drawText("FINAL MENU ART BEGINS AT R2", 6, 19);
+    VDP_setTextPalette(PAL0);
+    VDP_drawText("MODERN TANKS", 14, 6);
+    VDP_drawText("R2 VISUAL BUILD", 12, 10);
+    VDP_drawText("PRESS START OR A", 11, 15);
 }
 
-static void draw_menu(void)
+static void draw_shell(const char *title, const char *bank)
 {
-    static const char *items[4] =
-    {
-        "PLAY [TEST BATTLE]",
-        "GARAGE",
-        "STATISTICS [R1 LOCKED]",
-        "OPTIONS [R1 LOCKED]"
-    };
-    u16 i;
+    char buffer[8];
 
-    draw_common_header();
-    VDP_drawText("MAIN MENU SHELL", 12, 6);
-
-    for (i = 0; i < 4; i++)
-    {
-        VDP_drawText((i == menuIndex) ? ">" : " ", 6, 9 + (i * 2));
-        VDP_drawText(items[i], 8, 9 + (i * 2));
-    }
-
-    VDP_drawText("A/START: ENTER  C: 100-TRANS SOAK", 2, 19);
+    VDP_setTextPalette(PAL0);
+    VDP_drawText("MODERN TANKS / R2", 11, 2);
+    VDP_drawText(title, 10, 8);
+    VDP_drawText("NO GAMEPLAY IN R2", 11, 12);
+    VDP_drawText("B: RETURN TO MENU", 11, 16);
+    VDP_drawText("MENU BANK UNLOADED", 10, 19);
+    VDP_drawText("BANK:", 4, 23);
+    VDP_drawText(bank, 10, 23);
+    VDP_drawText("ERR:", 22, 23);
+    uintToStr(errorCount, buffer, 2);
+    VDP_drawText(buffer, 27, 23);
 }
 
-static void draw_test_battle(void)
+static void draw_state(GameState state)
 {
-    draw_common_header();
-    VDP_drawText("TEST BATTLE SHELL", 11, 8);
-    VDP_drawText("NO GAMEPLAY IN R1", 11, 11);
-    VDP_drawText("B: RETURN TO MENU", 11, 15);
-    VDP_drawText("BATTLE BANK IS ISOLATED", 8, 18);
-}
-
-static void draw_garage(void)
-{
-    draw_common_header();
-    VDP_drawText("GARAGE SHELL", 14, 8);
-    VDP_drawText("NO GARAGE ART IN R1", 10, 11);
-    VDP_drawText("B: RETURN TO MENU", 11, 15);
-    VDP_drawText("GARAGE BANK IS ISOLATED", 8, 18);
-}
-
-static void state_draw(GameState state)
-{
-    switch (state)
-    {
-        case STATE_BOOT: draw_boot(); break;
-        case STATE_TITLE: draw_title(); break;
-        case STATE_MAIN_MENU: draw_menu(); break;
-        case STATE_TEST_BATTLE: draw_test_battle(); break;
-        case STATE_GARAGE: draw_garage(); break;
-        default: set_error("DRAW_INVALID_STATE"); break;
-    }
-    draw_debug_layer();
+    if (state == STATE_BOOT) draw_boot();
+    else if (state == STATE_TITLE) draw_title();
+    else if (state == STATE_MAIN_MENU) draw_menu_art();
+    else if (state == STATE_TEST_BATTLE) draw_shell("TEST BATTLE SHELL", "BATTLE");
+    else if (state == STATE_GARAGE) draw_shell("GARAGE SHELL", "GARAGE");
+    else set_error("DRAW_INVALID_STATE");
 }
 
 static void state_enter(GameState state)
 {
     ResourceBank expected = state_bank(state);
-
-    stateEnterCount[state]++;
     stateTicks = 0;
     resource_bank_load(expected);
-
     if (activeBank != expected) set_error("BANK_STATE_MISMATCH");
-    state_draw(state);
+    draw_state(state);
 }
 
 static void state_leave(GameState state)
 {
-    stateLeaveCount[state]++;
+    (void) state;
     resource_bank_unload();
 }
 
@@ -351,11 +336,6 @@ static void change_state(GameState next)
         return;
     }
 
-    /*
-     * State-bank teardown/setup is a blanking transaction. This makes CRAM,
-     * VRAM and sprite cleanup deterministic instead of trying to prove CRAM
-     * state while the VDP is actively scanning the visible frame.
-     */
     VDP_setEnable(FALSE);
     VDP_waitFIFOEmpty();
 
@@ -377,49 +357,8 @@ static void input_poll(void)
     previousPad = current;
 }
 
-static void start_soak(void)
-{
-    if (currentState != STATE_MAIN_MENU) return;
-
-    soakActive = TRUE;
-    soakPassed = FALSE;
-    soakTransitions = 0;
-    soakStepTicks = 0;
-}
-
-static void update_soak_tick(void)
-{
-    GameState next;
-    u16 phase;
-
-    if (!soakActive) return;
-
-    soakStepTicks++;
-    if (soakStepTicks < R1_SOAK_STEP_TICKS) return;
-    soakStepTicks = 0;
-
-    phase = soakTransitions & 3;
-    if (phase == 0) next = STATE_TEST_BATTLE;
-    else if (phase == 1) next = STATE_MAIN_MENU;
-    else if (phase == 2) next = STATE_GARAGE;
-    else next = STATE_MAIN_MENU;
-
-    change_state(next);
-    soakTransitions++;
-
-    if (soakTransitions >= R1_SOAK_TRANSITIONS)
-    {
-        soakActive = FALSE;
-        soakPassed = (errorCount == 0) && (currentState == STATE_MAIN_MENU);
-        if (!soakPassed) set_error("SOAK_FAILED");
-        state_draw(currentState);
-    }
-}
-
 static void handle_input_frame(void)
 {
-    if (soakActive) return;
-
     switch (currentState)
     {
         case STATE_TITLE:
@@ -429,28 +368,21 @@ static void handle_input_frame(void)
         case STATE_MAIN_MENU:
             if (input.pressed & BUTTON_UP)
             {
-                menuIndex = (menuIndex == 0) ? 3 : (menuIndex - 1);
-                state_draw(currentState);
+                u16 old = menuIndex;
+                menuIndex = (menuIndex == 0) ? (R2_MENU_COUNT - 1) : (menuIndex - 1);
+                draw_selector(menuIndex, old, FALSE);
             }
             if (input.pressed & BUTTON_DOWN)
             {
-                menuIndex = (menuIndex + 1) & 3;
-                state_draw(currentState);
-            }
-            if (input.pressed & BUTTON_C)
-            {
-                start_soak();
-                state_draw(currentState);
+                u16 old = menuIndex;
+                menuIndex = (menuIndex + 1) % R2_MENU_COUNT;
+                draw_selector(menuIndex, old, FALSE);
             }
             if (input.pressed & (BUTTON_A | BUTTON_START))
             {
                 if (menuIndex == 0) change_state(STATE_TEST_BATTLE);
                 else if (menuIndex == 1) change_state(STATE_GARAGE);
-                else
-                {
-                    lastError = "R1_ITEM_NOT_IMPLEMENTED";
-                    state_draw(currentState);
-                }
+                /* STATISTICS and OPTIONS intentionally remain visual-only until R9. */
             }
             break;
 
@@ -470,17 +402,15 @@ static void update_logic_tick(void)
 
     if (currentState == STATE_BOOT)
     {
-        if (stateTicks >= R1_BOOT_TICKS) change_state(STATE_TITLE);
+        if (stateTicks >= R2_BOOT_TICKS) change_state(STATE_TITLE);
         return;
     }
 
-    update_soak_tick();
+    if (currentState == STATE_MAIN_MENU) update_menu_visuals();
 }
 
 int main(bool hardReset)
 {
-    u16 i;
-
     (void) hardReset;
 
     VDP_setScreenWidth320();
@@ -491,23 +421,14 @@ int main(bool hardReset)
     VDP_setTextPriority(TRUE);
 
     JOY_setSupport(PORT_1, JOY_SUPPORT_3BTN);
+
     videoHz = SYS_isPAL() ? 50 : 60;
-
-    for (i = 0; i < STATE_COUNT; i++)
-    {
-        stateEnterCount[i] = 0;
-        stateLeaveCount[i] = 0;
-    }
-
-    /* First bank setup follows the same blanked transaction rule as transitions. */
-    VDP_setEnable(FALSE);
     clear_all_palettes();
     VDP_resetSprites();
     VDP_updateSprites(0, CPU);
+
     previousPad = JOY_readJoypad(JOY_1);
     state_enter(STATE_BOOT);
-    VDP_waitFIFOEmpty();
-    VDP_setEnable(TRUE);
 
     while (TRUE)
     {
@@ -515,15 +436,12 @@ int main(bool hardReset)
         input_poll();
         handle_input_frame();
 
-        /* Fixed 60 Hz logic clock: PAL executes 6 logic ticks per 5 video frames. */
-        logicAccumulator += R1_LOGIC_HZ;
+        logicAccumulator += R2_LOGIC_HZ;
         while (logicAccumulator >= videoHz)
         {
             logicAccumulator -= videoHz;
             update_logic_tick();
         }
-
-        draw_debug_layer();
     }
 
     return 0;
