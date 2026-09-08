@@ -1,4 +1,4 @@
-name: R2 Final Main Menu Visual SGDK CI
+name: R2 Sharp Full-Field Main Menu SGDK CI
 
 on:
   workflow_dispatch:
@@ -28,7 +28,7 @@ jobs:
           import hashlib
           from pathlib import Path
           exp={
-            'r2_menu_bg.png':('5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea',(320,224)),
+            'r2_menu_bg.png':('2e8630affb921321a26d0e2f893409cbd23124ac874fda2377cd321a4336cf29',(320,224)),
             'r2_selector.png':('36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd',(144,16)),
           }
           root=Path('sgdk/res')
@@ -48,7 +48,7 @@ jobs:
           assert all(((v>>4)&3)==0 for v in sel.getdata())
           assert 15 in set(sel.getdata())
           assert 15 not in set(bg.getdata()), 'PAL0 index 15 is reserved for selector pulse'
-          print('R2 exact graphics PASS; palette tile use',use)
+          print('R2 sharp graphics PASS; palette tile use',use)
           PY
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
@@ -69,7 +69,7 @@ jobs:
           bg=uniq('sgdk/res/r2_menu_bg.png')
           sel=uniq('sgdk/res/r2_selector.png')
           Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-            f'# R2 exact graphics audit\n\n- Background unique 8x8 indexed tiles: **{bg}**.\n- Selector unique tiles: **{sel}**.\n- Raw patterns before ResComp duplicate/flip savings: **{(bg+sel)*32} bytes**.\n- Artificial project graphics ceiling: **none**.\n- Runtime guards actual SGDK TILE_USER_MAX_INDEX.\n',encoding='utf-8')
+            f'# R2 sharp full-field graphics audit\n\n- Background unique 8x8 indexed tiles: **{bg}**.\n- Selector unique tiles: **{sel}**.\n- Raw patterns before ResComp duplicate/flip savings: **{(bg+sel)*32} bytes**.\n- Artificial project graphics ceiling: **none**.\n- Runtime guards actual SGDK TILE_USER_MAX_INDEX.\n',encoding='utf-8')
           print('tiles',bg,sel)
           PY
 
@@ -135,13 +135,13 @@ jobs:
           ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
           if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — Final Visual Candidate
+          # Modern Tanks R2 — Sharp Full-Field Candidate
           - Commit: ${GITHUB_SHA}
           - SGDK: 2.11 pinned container
           - ROM size: ${ROM_SIZE}
           - ROM SHA-256: ${ROM_SHA}
           - Native presentation: 320x224
-          - Graphics: exact approved-style indexed R2 asset, PAL0..PAL3 per 8x8 tile
+          - Graphics: approved battlefield fitted to show substantially more of the field, with native-resolution crisp menu typography
           - Menu: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ
           - Lower tank/stat/minimap strip: removed
           - Decorative moving tank: removed
@@ -155,7 +155,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Final_Visual_Candidate
+          name: Modern_Tanks_R2_Sharp_Full_Field_Candidate
           path: |
             sgdk/out/rom.bin
             sgdk/res/r2_menu_bg.png

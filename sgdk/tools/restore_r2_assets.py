@@ -8,17 +8,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / "art"
 RES = ROOT / "res"
-BG_SHA = "5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea"
+BG_SHA = "2e8630affb921321a26d0e2f893409cbd23124ac874fda2377cd321a4336cf29"
 SEL_SHA = "36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd"
 
 
 def read_bg() -> bytes:
-    parts = [ART / f"r2_exact_bg.b64.{i:02d}" for i in range(20)]
+    parts = [ART / f"r2_sharp_bg.b85.{i:02d}" for i in range(20)]
     missing = [str(p) for p in parts if not p.is_file()]
     if missing:
-        raise SystemExit(f"missing R2 exact chunks: {missing}")
+        raise SystemExit(f"missing R2 sharp chunks: {missing}")
     encoded = "".join(p.read_text(encoding="ascii") for p in parts)
-    return base64.b64decode(encoded, validate=True)
+    return base64.b85decode(encoded)
 
 
 def read_selector() -> bytes:
