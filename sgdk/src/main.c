@@ -112,10 +112,14 @@ static void set_error(const char *code)
 
 static void clear_all_palettes(void)
 {
-    PAL_setPalette(PAL0, palette_black, CPU);
-    PAL_setPalette(PAL1, palette_black, CPU);
-    PAL_setPalette(PAL2, palette_black, CPU);
-    PAL_setPalette(PAL3, palette_black, CPU);
+    /*
+     * palette_black is SGDK's 64-entry all-black CRAM source.
+     * Use one contiguous CPU write, then explicitly drain the VDP FIFO before
+     * any readback. Immediate CRAM readback after FIFO-backed writes can see
+     * stale values on Mega Drive timing/emulator implementations.
+     */
+    PAL_setColors(0, palette_black, 64, CPU);
+    VDP_waitFIFOEmpty();
 }
 
 static bool palettes_are_black(void)
@@ -123,7 +127,11 @@ static bool palettes_are_black(void)
     u16 colors[64];
     u16 i;
 
+    /* Ensure every earlier CRAM write is committed before changing the VDP
+     * command port to CRAM-read mode. */
+    VDP_waitFIFOEmpty();
     PAL_getColors(0, colors, 64);
+
     for (i = 0; i < 64; i++)
     {
         if (colors[i] != 0) return FALSE;
