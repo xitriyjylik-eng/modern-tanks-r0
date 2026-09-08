@@ -1,14 +1,1 @@
-y-4),(cx+9,cy),(cx+6,cy+4),(cx-7,cy+4)],fill=body)
-        d.rectangle([cx-2,cy-6,cx+3,cy+1],fill=hi)
-        d.rectangle([cx+2,cy-2,cx+12,cy-1],fill=hi)
-    ptext(x+9,y+26,f"T-{kind+1}",I(3,15 if kind==0 else 8),1,1)
-for i,x in enumerate(card_x): card_tank(x,180,i)
-
-# stats bars
-stats=[("ОГН",4),("БРН",3),("СКР",5),("ДАЛ",3)]
-for j,(name,val) in enumerate(stats):
-    y=184+j*8
-    ptext(181,y,name,I(3,8),1,1)
-    d.rectangle([199,y+1,235,y+6],fill=I(3,2),outline=I(3,5))
-    for k in range(5):
- 
+# continuation intentionally empty; part06 continues the stats-bar loop
