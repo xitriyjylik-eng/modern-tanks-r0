@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Restore the exact approved R2 native indexed assets.
-
-The binary PNGs are source-controlled as small lossless Base64 chunks because the
-chat GitHub transport can truncate larger binary/text payloads. This script does
-no image generation or transformation: it only concatenates and decodes the
-already-approved, already-quantized bytes and verifies their SHA-256 hashes.
-"""
 from __future__ import annotations
-
 import base64
 import hashlib
 from pathlib import Path
@@ -15,39 +7,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / "art"
 RES = ROOT / "res"
-
-EXPECTED = {
-    "r2_menu_bg.png": "acf9bcd28e0d9d30d7bb205404ad97a0252e15e76db8039a251ed73526eb2e61",
-    "r2_selector.png": "9da097c4fe2af98452d3787f91fd879aab9b468d5daf56a90f1b2d2bc617663f",
-}
+BG_SHA = "5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea"
+SEL_SHA = "36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd"
 
 
-def restore_bg() -> bytes:
-    parts = sorted(ART.glob("r2_final_bg.b64.*"))
-    if len(parts) != 14:
-        raise SystemExit(f"expected 14 R2 background chunks, found {len(parts)}")
-    encoded = "".join(p.read_text(encoding="ascii").strip() for p in parts)
+def read_chunks() -> bytes:
+    parts = [ART / f"r2_exact_bg.b64.{i:02d}" for i in range(20)]
+    missing = [str(p) for p in parts if not p.is_file()]
+    if missing:
+        raise SystemExit(f"missing R2 exact chunks: {missing}")
+    encoded = "".join(p.read_text(encoding="ascii") for p in parts)
     return base64.b64decode(encoded, validate=True)
 
 
-def restore_selector() -> bytes:
-    encoded = (ART / "r2_final_selector.b64").read_text(encoding="ascii").strip()
-    return base64.b64decode(encoded, validate=True)
-
-
-def write_checked(name: str, data: bytes) -> None:
-    sha = hashlib.sha256(data).hexdigest()
-    if sha != EXPECTED[name]:
-        raise SystemExit(f"{name}: restored SHA mismatch {sha} != {EXPECTED[name]}")
-    path = RES / name
-    path.write_bytes(data)
-    print(f"restored {path.relative_to(ROOT)} {len(data)} bytes sha256={sha}")
+def checked_write(name: str, data: bytes, expected: str) -> None:
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        raise SystemExit(f"{name}: SHA mismatch {actual} != {expected}")
+    RES.mkdir(parents=True, exist_ok=True)
+    (RES / name).write_bytes(data)
+    print(f"restored {name}: {len(data)} bytes sha256={actual}")
 
 
 def main() -> None:
-    RES.mkdir(parents=True, exist_ok=True)
-    write_checked("r2_menu_bg.png", restore_bg())
-    write_checked("r2_selector.png", restore_selector())
+    checked_write("r2_menu_bg.png", read_chunks(), BG_SHA)
+    sel = base64.b64decode((ART / "r2_exact_selector.b64").read_text(encoding="ascii"), validate=True)
+    checked_write("r2_selector.png", sel, SEL_SHA)
 
 
 if __name__ == "__main__":

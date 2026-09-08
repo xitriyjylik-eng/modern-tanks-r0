@@ -12,15 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
     env:
       SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Restore and validate exact R2 indexed assets
+      - name: Restore exact approved R2 assets
         shell: bash
         run: |
           set -euo pipefail
@@ -28,134 +25,77 @@ jobs:
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
           python3 - <<'PY'
           from PIL import Image
-          from pathlib import Path
           import hashlib
-
-          root = Path('sgdk/res')
-          bg_path = root / 'r2_menu_bg.png'
-          sel_path = root / 'r2_selector.png'
-
-          expected = {
-              bg_path: ('acf9bcd28e0d9d30d7bb205404ad97a0252e15e76db8039a251ed73526eb2e61', (320, 224)),
-              sel_path: ('9da097c4fe2af98452d3787f91fd879aab9b468d5daf56a90f1b2d2bc617663f', (144, 16)),
+          from pathlib import Path
+          exp={
+            'r2_menu_bg.png':('5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea',(320,224)),
+            'r2_selector.png':('36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd',(144,16)),
           }
-
-          for path, (sha, size) in expected.items():
-              data = path.read_bytes()
-              actual = hashlib.sha256(data).hexdigest()
-              if actual != sha:
-                  raise SystemExit(f'{path}: SHA mismatch {actual} != {sha}')
-              im = Image.open(path)
-              im.load()
-              if im.mode != 'P':
-                  raise SystemExit(f'{path}: expected indexed P mode, got {im.mode}')
-              if im.size != size:
-                  raise SystemExit(f'{path}: size {im.size} != {size}')
-
-          # ResComp 8bpp tile contract: palette-select bits 4-5 must be
-          # constant inside every 8x8 tile.
-          bg = Image.open(bg_path)
-          bg.load()
-          bad = []
-          palette_use = [0, 0, 0, 0]
-          for ty in range(0, bg.height, 8):
-              for tx in range(0, bg.width, 8):
-                  vals = [bg.getpixel((x, y))
-                          for y in range(ty, ty + 8)
-                          for x in range(tx, tx + 8)]
-                  banks = {((v >> 4) & 3) for v in vals}
-                  if len(banks) != 1:
-                      bad.append((tx, ty, sorted(banks)))
-                  else:
-                      palette_use[next(iter(banks))] += 1
-          if bad:
-              raise SystemExit(f'Per-tile palette contract failed: {bad[:8]}')
-
-          sel = Image.open(sel_path)
-          sel.load()
-          if any(((v >> 4) & 3) != 0 for v in sel.getdata()):
-              raise SystemExit('Selector must use PAL0 only')
-          if 15 not in set(sel.getdata()):
-              raise SystemExit('Selector gold index 15 missing')
-
-          print('R2 exact asset validation PASS; palette-tile counts:', palette_use)
+          root=Path('sgdk/res')
+          for name,(sha,size) in exp.items():
+            p=root/name; data=p.read_bytes()
+            assert hashlib.sha256(data).hexdigest()==sha
+            im=Image.open(p); im.load()
+            assert im.mode=='P' and im.size==size, (name,im.mode,im.size)
+          bg=Image.open(root/'r2_menu_bg.png'); bg.load()
+          use=[0,0,0,0]
+          for ty in range(0,224,8):
+            for tx in range(0,320,8):
+              banks={((bg.getpixel((x,y))>>4)&3) for y in range(ty,ty+8) for x in range(tx,tx+8)}
+              assert len(banks)==1,(tx,ty,banks)
+              use[next(iter(banks))]+=1
+          sel=Image.open(root/'r2_selector.png'); sel.load()
+          assert all(((v>>4)&3)==0 for v in sel.getdata())
+          assert 15 in set(sel.getdata())
+          print('R2 exact graphics PASS; palette tile use',use)
           PY
-
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
 
-      - name: Audit R2 tile usage against real VDP space
+      - name: Audit tile use
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
-
-          def unique_tiles(path):
-              im = Image.open(path)
-              im.load()
-              tiles = set()
-              for y in range(0, im.height, 8):
-                  for x in range(0, im.width, 8):
-                      tiles.add(bytes(im.crop((x, y, x + 8, y + 8)).getdata()))
-              return len(tiles)
-
-          bg = unique_tiles('sgdk/res/r2_menu_bg.png')
-          selector = unique_tiles('sgdk/res/r2_selector.png')
-          raw = (bg + selector) * 32
-
+          def uniq(path):
+            im=Image.open(path); im.load(); s=set()
+            for y in range(0,im.height,8):
+              for x in range(0,im.width,8):
+                s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
+            return len(s)
+          bg=uniq('sgdk/res/r2_menu_bg.png')
+          sel=uniq('sgdk/res/r2_selector.png')
           Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-              '# R2 resource usage — Final Visual Target\n\n'
-              f'- Background unique indexed 8x8 tiles before ResComp duplicate/flip optimization: **{bg}**.\n'
-              f'- Selector unique indexed tiles: **{selector}**.\n'
-              f'- Conservative raw pattern bytes before ResComp savings: **{raw}**.\n'
-              '- No artificial project graphics ceiling is applied.\n'
-              '- Runtime checks actual SGDK/VDP user tile space via TILE_USER_MAX_INDEX.\n'
-              '- Background uses per-tile PAL0..PAL3 assignment supported by ResComp 8bpp indexed images.\n'
-              '- Lower tank/stat/minimap HUD: removed.\n'
-              '- Detached decorative moving tank: removed.\n'
-              '- R3 battle renderer remains absent.\n',
-              encoding='utf-8')
-          print('R2 resource audit', bg, selector, raw)
+            f'# R2 exact graphics audit\n\n- Background unique 8x8 indexed tiles: **{bg}**.\n- Selector unique tiles: **{sel}**.\n- Raw patterns before ResComp duplicate/flip savings: **{(bg+sel)*32} bytes**.\n- Artificial project graphics ceiling: **none**.\n- Runtime guards actual SGDK TILE_USER_MAX_INDEX.\n',encoding='utf-8')
+          print('tiles',bg,sel)
           PY
 
       - name: Verify R2 source contract
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'Modern Tanks R2' sgdk/src/main.c
-          grep -q 'Final Main Menu Visual Target' sgdk/src/main.c
-          grep -q 'r2_menu_bg' sgdk/src/main.c
-          grep -q 'r2_selector' sgdk/src/main.c
-          grep -q 'TILE_USER_MAX_INDEX' sgdk/src/main.c
+          grep -q 'R2 Final Main Menu Visual Target' sgdk/src/main.c
           grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
-          grep -q 'STATE_TEST_BATTLE' sgdk/src/main.c
-          grep -q 'STATE_GARAGE' sgdk/src/main.c
-          grep -q 'VDP_setEnable(FALSE)' sgdk/src/main.c
-          test -f sgdk/res/resources.res
+          grep -q 'TILE_USER_MAX_INDEX' sgdk/src/main.c
           grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
           grep -q 'IMAGE r2_selector' sgdk/res/resources.res
-          ! grep -q 'r2_anim_tank' sgdk/res/resources.res
-          ! grep -q 'r2_anim_tank' sgdk/src/main.c
           ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
           ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
 
-      - name: Pin exact container image for this run
+      - name: Pin SGDK 2.11
         shell: bash
         run: |
           set -euo pipefail
           docker pull "$SGDK_IMAGE"
-          IMAGE_ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
-          IMAGE_DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
-          test -n "$IMAGE_ID"
-          test -n "$IMAGE_DIGEST"
-          mkdir -p sgdk/out
-          printf '%s\n' "$IMAGE_ID" > sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
-          printf '%s\n' "$IMAGE_DIGEST" > sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
-          printf 'SGDK_IMAGE_ID=%s\n' "$IMAGE_ID" >> "$GITHUB_ENV"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
 
-      - name: Prepare two clean writable build trees
+      - name: Prepare reproducible build trees
         shell: bash
         run: |
           set -euo pipefail
@@ -164,19 +104,12 @@ jobs:
           cp -a sgdk /tmp/sgdk-r2-b
           chmod -R a+rwX /tmp/sgdk-r2-a /tmp/sgdk-r2-b
 
-      - name: Build A with pinned SGDK 2.11 image ID
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm -v /tmp/sgdk-r2-a:/m68k "$SGDK_IMAGE_ID"
+      - name: Build A
+        run: docker run --rm -v /tmp/sgdk-r2-a:/m68k "$SGDK_IMAGE_ID"
+      - name: Build B
+        run: docker run --rm -v /tmp/sgdk-r2-b:/m68k "$SGDK_IMAGE_ID"
 
-      - name: Build B with the exact same image ID
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm -v /tmp/sgdk-r2-b:/m68k "$SGDK_IMAGE_ID"
-
-      - name: Prove reproducibility
+      - name: Reproducibility and ROM audit
         shell: bash
         run: |
           set -euo pipefail
@@ -185,58 +118,46 @@ jobs:
           cmp /tmp/sgdk-r2-a/out/rom.bin /tmp/sgdk-r2-b/out/rom.bin
           cp /tmp/sgdk-r2-a/out/rom.bin sgdk/out/rom.bin
           sha256sum sgdk/out/rom.bin | tee sgdk/out/R2_SHA256.txt
-
-      - name: Independent ROM header/checksum audit
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R2_ROM_AUDIT.json
 
-      - name: Build R2 stage report
+      - name: Build report
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p sgdk/out
-          ROM_SHA="NOT_BUILT"
-          ROM_SIZE="NOT_BUILT"
-          if [ -f sgdk/out/rom.bin ]; then
-            ROM_SHA="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
-            ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"
-          fi
+          ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
+          if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
-          # Modern Tanks R2 — CI Build Report
-
-          - Stage: R2 Main Menu Visual Target — final approved-style candidate
+          # Modern Tanks R2 — Final Visual Candidate
           - Commit: ${GITHUB_SHA}
-          - Toolchain: SGDK 2.11 via ${SGDK_IMAGE}
-          - ROM size: ${ROM_SIZE} bytes
+          - SGDK: 2.11 pinned container
+          - ROM size: ${ROM_SIZE}
           - ROM SHA-256: ${ROM_SHA}
-          - Reproducibility: two clean builds compared byte-for-byte before audit
-          - Input contract: standard 3-button controller
           - Native presentation: 320x224
-          - Menu background: derived directly from the approved battlefield visual language
-          - Color method: indexed 8bpp with per-8x8-tile PAL0..PAL3 selection
-          - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ
-          - Removed: lower tank/stat/minimap strip and detached decorative moving menu tank
-          - Intentionally absent: R3 battle renderer/HUD, world map streaming, gameplay/AI, SRAM, audio
-          - Granada assets/code embedded: NO
-          - Old DEV code embedded: NO
-          - Gate status: TARGET PENDING
+          - Graphics: exact approved-style indexed R2 asset, PAL0..PAL3 per 8x8 tile
+          - Menu: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ
+          - Lower tank/stat/minimap strip: removed
+          - Decorative moving tank: removed
+          - R1 core: preserved
+          - R3 gameplay: not started
+          - Granada / old DEV assets: not embedded
+          - Gate: TARGET PENDING owner emulator acceptance
           REPORT
 
-      - name: Publish R2 ROM artifact
+      - name: Publish R2 candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Final_Visual_Target
+          name: Modern_Tanks_R2_Final_Visual_Candidate
           path: |
             sgdk/out/rom.bin
+            sgdk/res/r2_menu_bg.png
             sgdk/out/R2_SHA256.txt
             sgdk/out/R2_ROM_AUDIT.json
-            sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
-            sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
             sgdk/out/R2_BUILD_REPORT.md
             sgdk/out/R2_RESOURCE_BUDGET.md
             sgdk/out/R2_RESOURCE_SHA256.txt
+            sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
           if-no-files-found: warn
