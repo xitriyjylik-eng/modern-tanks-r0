@@ -32,7 +32,12 @@ jobs:
           grep -q 'VDP_setEnable(FALSE)' sgdk/src/main.c
           test -f sgdk/res/resources.res
           grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
-          sha256sum -c sgdk/res/R2_RESOURCE_SHA256.txt
+          test "$(git hash-object sgdk/res/r2_menu_bg.png)" = "5584171fbf999a2442b8635727080992ad522d6b"
+          test "$(git hash-object sgdk/res/r2_sel_0.png)" = "20059e9c8f81a23d67ce6abbe51ae7ebc63112b3"
+          test "$(git hash-object sgdk/res/r2_sel_1.png)" = "860afbdd2884ec348dc9647504a3751b2254e924"
+          test "$(git hash-object sgdk/res/r2_sel_2.png)" = "20aa56222a7938dffd2c4b6efdddc014814df38d"
+          test "$(git hash-object sgdk/res/r2_sel_3.png)" = "566b6bc6e6747f43f0428bc73961ba26a5478760"
+          test "$(git hash-object sgdk/res/r2_anim_tank.png)" = "ce830b41c27fb0209bef0d9b46c5ae4dcc7c332a"
           ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
           ! find sgdk -type f -iname '*MAIN_MENU_REFERENCE*' -print -quit | grep -q .
           ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
@@ -110,7 +115,7 @@ jobs:
           - ROM SHA-256: ${ROM_SHA}
           - Reproducibility: two clean builds compared byte-for-byte before audit
           - Input contract: standard 3-button controller
-          - Included: accepted R1 core, final R2 menu composition, original 16-bit battlefield backdrop, metallic logo, four canonical Russian menu items, tank-class strip, stats preview, minimap preview, animated selector, scripted moving menu tank
+          - Included: accepted R1 core, R2 menu composition, original 16-bit battlefield backdrop, metallic logo, four canonical Russian menu items, tank-class strip, stats preview, minimap preview, animated selector, scripted moving menu tank
           - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; upgrades remain inside GARAGE and missions remain under PLAY per frozen design
           - Intentionally absent: R3 battle renderer/HUD, R4 combat tank art, world map streaming, gameplay/AI, SRAM, audio
           - Locked reference PNG embedded in ROM: NO
