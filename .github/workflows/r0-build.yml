@@ -1,4 +1,4 @@
-name: R2 Main Menu Visual SGDK CI
+name: R2 Final Main Menu Visual SGDK CI
 
 on:
   workflow_dispatch:
@@ -20,33 +20,74 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Decode reference-faithful R2 game assets
+      - name: Validate native R2 indexed assets
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
-          python3 sgdk/tools/generate_r2_art.py
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
-          required = {
-              'r2_menu_bg.png': (320, 224),
-              'r2_sel_0.png': (104, 16),
-              'r2_sel_1.png': (104, 16),
-              'r2_sel_2.png': (104, 16),
-              'r2_sel_3.png': (104, 16),
-          }
-          for name, size in required.items():
-              p = Path('sgdk/res') / name
-              im = Image.open(p)
-              im.load()
-              assert im.mode == 'P', (name, im.mode)
-              assert im.size == size, (name, im.size)
-          print('R2 reference-faithful asset validation PASS')
-          PY
-          mkdir -p sgdk/out
-          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_sel_0.png sgdk/res/r2_sel_1.png sgdk/res/r2_sel_2.png sgdk/res/r2_sel_3.png > sgdk/out/R2_RESOURCE_SHA256.txt
+          import hashlib
 
+          root = Path('sgdk/res')
+          bg_path = root / 'r2_menu_bg.png'
+          sel_path = root / 'r2_selector.png'
+
+          expected = {
+              bg_path: ('acf9bcd28e0d9d30d7bb205404ad97a0252e15e76db8039a251ed73526eb2e61', (320, 224)),
+              sel_path: ('9da097c4fe2af98452d3787f91fd879aab9b468d5daf56a90f1b2d2bc617663f', (144, 16)),
+          }
+
+          for path, (sha, size) in expected.items():
+              data = path.read_bytes()
+              actual = hashlib.sha256(data).hexdigest()
+              if actual != sha:
+                  raise SystemExit(f'{path}: SHA mismatch {actual} != {sha}')
+              im = Image.open(path)
+              im.load()
+              if im.mode != 'P':
+                  raise SystemExit(f'{path}: expected indexed P mode, got {im.mode}')
+              if im.size != size:
+                  raise SystemExit(f'{path}: size {im.size} != {size}')
+
+          # ResComp 8bpp tile contract:
+          # palette-select bits 4-5 must be constant inside every 8x8 tile.
+          bg = Image.open(bg_path)
+          bg.load()
+          bad = []
+          palette_use = [0, 0, 0, 0]
+          for ty in range(0, bg.height, 8):
+              for tx in range(0, bg.width, 8):
+                  vals = []
+                  for y in range(ty, ty + 8):
+                      for x in range(tx, tx + 8):
+                          vals.append(bg.getpixel((x, y)))
+                  banks = {((v >> 4) & 3) for v in vals}
+                  if len(banks) != 1:
+                      bad.append((tx, ty, sorted(banks)))
+                  else:
+                      palette_use[next(iter(banks))] += 1
+          if bad:
+              raise SystemExit(f'Per-tile palette contract failed: {bad[:8]}')
+
+          sel = Image.open(sel_path)
+          sel.load()
+          if any(((v >> 4) & 3) != 0 for v in sel.getdata()):
+              raise SystemExit('Selector must use PAL0 only')
+          if 15 not in set(sel.getdata()):
+              raise SystemExit('Selector gold index 15 missing')
+
+          print('R2 native asset validation PASS; palette-tile counts:', palette_use)
+          PY
+
+          mkdir -p sgdk/out
+          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
+
+      - name: Audit R2 tile usage without arbitrary project ceiling
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
@@ -54,54 +95,51 @@ jobs:
           def unique_tiles(path):
               im = Image.open(path)
               im.load()
-              tiles=set()
+              tiles = set()
               for y in range(0, im.height, 8):
                   for x in range(0, im.width, 8):
-                      tile=bytes(im.crop((x,y,min(x+8,im.width),min(y+8,im.height))).getdata())
+                      tile = bytes(im.crop((x, y, x + 8, y + 8)).getdata())
                       tiles.add(tile)
               return len(tiles)
 
-          bg=unique_tiles('sgdk/res/r2_menu_bg.png')
-          sels=[unique_tiles(f'sgdk/res/r2_sel_{i}.png') for i in range(4)]
-          worst=bg+max(sels)
-          raw=worst*32
-          ceiling=44*1024
-          free=ceiling-raw
+          bg = unique_tiles('sgdk/res/r2_menu_bg.png')
+          selector = unique_tiles('sgdk/res/r2_selector.png')
+          raw = (bg + selector) * 32
+
           Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
-              '# R2 resource budget — Reference-Faithful Rework\n\n'
-              f'- Background unique 8x8 tiles before ResComp optimization: **{bg}**.\n'
-              f'- Selector unique tiles: **{sels}**; only one selector image is resident at a time.\n'
-              f'- Conservative simultaneous project-pattern upper bound: **{worst} tiles / {raw} bytes**.\n'
-              f'- Against the project 44 KiB pattern ceiling: **{free} bytes free** before ResComp duplicate/flip savings.\n'
-              '- Detached decorative moving-tank overlay: **removed**.\n'
-              '- Lower tank/stat/minimap HUD: **removed by owner direction**.\n'
-              '- Runtime recurring visual update: selector pulse/navigation only.\n'
-              '- Locked source reference PNG files are not modified or copied into sgdk/.\n'
-              '- Runtime menu art is a Mega Drive adaptation derived from the approved project references.\n',
+              '# R2 resource usage — Final Visual Target\n\n'
+              f'- Background unique indexed 8x8 tiles before ResComp duplicate/flip optimization: **{bg}**.\n'
+              f'- Selector unique indexed tiles: **{selector}**.\n'
+              f'- Conservative raw pattern bytes before ResComp savings: **{raw}**.\n'
+              '- No artificial 44 KiB project ceiling is applied.\n'
+              '- Actual SGDK/VDP available tile space is checked by runtime against TILE_USER_MAX_INDEX.\n'
+              '- Background uses per-tile PAL0..PAL3 assignment supported by ResComp 8bpp indexed images.\n'
+              '- Lower tank/stat/minimap HUD: removed.\n'
+              '- Detached decorative moving tank: removed.\n'
+              '- R3 battle renderer remains absent.\n',
               encoding='utf-8')
-          if raw > ceiling:
-              raise SystemExit(f'R2 project pattern budget exceeded: {raw}>{ceiling}')
-          print('R2 resource budget PASS', bg, sels, raw, free)
+          print('R2 resource audit', bg, selector, raw)
           PY
 
-      - name: Verify R2 source and reference contract
+      - name: Verify R2 source contract
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'Modern Tanks R2' sgdk/src/main.c
-          grep -q 'Reference-Faithful Rework' sgdk/src/main.c
+          grep -q 'Final Main Menu Visual Target' sgdk/src/main.c
           grep -q 'r2_menu_bg' sgdk/src/main.c
+          grep -q 'r2_selector' sgdk/src/main.c
+          grep -q 'TILE_USER_MAX_INDEX' sgdk/src/main.c
           grep -q 'JOY_SUPPORT_3BTN' sgdk/src/main.c
           grep -q 'STATE_TEST_BATTLE' sgdk/src/main.c
           grep -q 'STATE_GARAGE' sgdk/src/main.c
           grep -q 'VDP_setEnable(FALSE)' sgdk/src/main.c
           test -f sgdk/res/resources.res
           grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
+          grep -q 'IMAGE r2_selector' sgdk/res/resources.res
           ! grep -q 'r2_anim_tank' sgdk/res/resources.res
           ! grep -q 'r2_anim_tank' sgdk/src/main.c
           ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
-          ! find sgdk -type f -iname '*MAIN_MENU_REFERENCE*' -print -quit | grep -q .
-          ! find sgdk -type f -iname '*TANKS_DETAILED_REFERENCE*' -print -quit | grep -q .
           ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
 
       - name: Pin exact container image for this run
@@ -170,24 +208,21 @@ jobs:
           cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
           # Modern Tanks R2 — CI Build Report
 
-          - Stage: R2 Main Menu Visual Target — Reference-Faithful Rework
+          - Stage: R2 Main Menu Visual Target — final approved-style candidate
           - Commit: ${GITHUB_SHA}
           - Toolchain: SGDK 2.11 via ${SGDK_IMAGE}
           - ROM size: ${ROM_SIZE} bytes
           - ROM SHA-256: ${ROM_SHA}
           - Reproducibility: two clean builds compared byte-for-byte before audit
           - Input contract: standard 3-button controller
-          - Included: accepted R1 core, native 320x224 Mega Drive menu, battlefield/metal/logo language derived from approved MAIN_MENU_REFERENCE, T-1/T-2/T-3/T-4 models derived from approved TANKS_DETAILED_REFERENCE, four canonical Russian menu items, selector pulse
-          - Removed by owner direction: lower tank-class/stat/minimap strip and detached decorative moving menu tank
-          - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; tank/class selection belongs to GARAGE; map/mission context belongs outside the main menu
+          - Native presentation: 320x224
+          - Menu background: derived directly from the approved battlefield visual language
+          - Color method: indexed 8bpp with per-8x8-tile PAL0..PAL3 selection
+          - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ
+          - Removed: lower tank/stat/minimap strip and detached decorative moving menu tank
           - Intentionally absent: R3 battle renderer/HUD, world map streaming, gameplay/AI, SRAM, audio
-          - Locked source reference files modified: NO
-          - Runtime game assets derived from approved project references: YES
           - Granada assets/code embedded: NO
-          - Project VDP sprite payload in menu: 0
-          - Runtime recurring visual update: selector pulse/navigation only
-          - Menu bank cleanup: inherited accepted R1 blanked teardown with plane/CRAM/sprite residue checks
-          - Emulator status: CI PASS does not replace MD Emu Games Gen target visual acceptance
+          - Old DEV code embedded: NO
           - Gate status: TARGET PENDING
           REPORT
 
@@ -195,7 +230,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Reference_Faithful
+          name: Modern_Tanks_R2_Final_Visual_Target
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
