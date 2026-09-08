@@ -20,6 +20,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Generate native-resolution R2 art
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 sgdk/tools/generate_r2_art.py
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          required = {
+              'r2_menu_bg.png': (320, 224),
+              'r2_sel_0.png': (136, 16),
+              'r2_sel_1.png': (136, 16),
+              'r2_sel_2.png': (136, 16),
+              'r2_sel_3.png': (136, 16),
+              'r2_anim_tank.png': (16, 16),
+          }
+          for name, size in required.items():
+              p = Path('sgdk/res') / name
+              im = Image.open(p)
+              im.load()
+              assert im.mode == 'P', (name, im.mode)
+              assert im.size == size, (name, im.size)
+          print('R2 generated art validation PASS')
+          PY
+          mkdir -p sgdk/out
+          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_sel_0.png sgdk/res/r2_sel_1.png sgdk/res/r2_sel_2.png sgdk/res/r2_sel_3.png sgdk/res/r2_anim_tank.png > sgdk/out/R2_RESOURCE_SHA256.txt
+
       - name: Verify R2 source and locked-art contract
         shell: bash
         run: |
@@ -32,12 +60,6 @@ jobs:
           grep -q 'VDP_setEnable(FALSE)' sgdk/src/main.c
           test -f sgdk/res/resources.res
           grep -q 'IMAGE r2_menu_bg' sgdk/res/resources.res
-          test "$(git hash-object sgdk/res/r2_menu_bg.png)" = "5584171fbf999a2442b8635727080992ad522d6b"
-          test "$(git hash-object sgdk/res/r2_sel_0.png)" = "20059e9c8f81a23d67ce6abbe51ae7ebc63112b3"
-          test "$(git hash-object sgdk/res/r2_sel_1.png)" = "860afbdd2884ec348dc9647504a3751b2254e924"
-          test "$(git hash-object sgdk/res/r2_sel_2.png)" = "20aa56222a7938dffd2c4b6efdddc014814df38d"
-          test "$(git hash-object sgdk/res/r2_sel_3.png)" = "566b6bc6e6747f43f0428bc73961ba26a5478760"
-          test "$(git hash-object sgdk/res/r2_anim_tank.png)" = "ce830b41c27fb0209bef0d9b46c5ae4dcc7c332a"
           ! grep -qi 'DEV149\|DEV150\|DEV151\|opcode.emitter' sgdk/src/main.c
           ! find sgdk -type f -iname '*MAIN_MENU_REFERENCE*' -print -quit | grep -q .
           ! find sgdk -type f -iname '*Granada*' -print -quit | grep -q .
@@ -115,17 +137,16 @@ jobs:
           - ROM SHA-256: ${ROM_SHA}
           - Reproducibility: two clean builds compared byte-for-byte before audit
           - Input contract: standard 3-button controller
-          - Included: accepted R1 core, R2 menu composition, original 16-bit battlefield backdrop, metallic logo, four canonical Russian menu items, tank-class strip, stats preview, minimap preview, animated selector, scripted moving menu tank
+          - Included: accepted R1 core, native-resolution original R2 menu art, battlefield backdrop, metallic logo, four canonical Russian menu items, tank-class strip, stats preview, minimap preview, animated selector, scripted moving menu tank
           - Canonical navigation: ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ; upgrades remain inside GARAGE and missions remain under PLAY per frozen design
           - Intentionally absent: R3 battle renderer/HUD, R4 combat tank art, world map streaming, gameplay/AI, SRAM, audio
-          - Locked reference PNG embedded in ROM: NO
-          - Granada assets/code embedded in ROM: NO
-          - Project-owned menu pattern worst case: 444 tiles / 14,208 bytes
+          - Locked reference PNG embedded/modified: NO
+          - Granada assets/code embedded: NO
+          - Project-owned menu pattern budget: conservative worst case 444 tiles / 14,208 bytes
           - Conservative 44 KiB pattern ceiling free: 30,848 bytes
-          - Project VDP sprite payload: 0 (scripted tank uses Plane A tiles)
-          - Worst recurring art update: 128-byte moving 2x2 tile overlay every 8 logic ticks; selector redraw only on navigation
+          - Project VDP sprite payload: 0; scripted tank uses Plane A tiles
           - Menu bank cleanup: inherited accepted R1 blanked teardown with plane/CRAM/sprite residue checks
-          - Emulator status: CI build PASS does not replace MD Emu Games Gen target visual acceptance
+          - Emulator status: CI PASS does not replace MD Emu Games Gen target visual acceptance
           - Gate status: TARGET PENDING
           REPORT
           cp sgdk/res/R2_RESOURCE_BUDGET.md sgdk/out/R2_RESOURCE_BUDGET.md
@@ -143,4 +164,5 @@ jobs:
             sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
             sgdk/out/R2_BUILD_REPORT.md
             sgdk/out/R2_RESOURCE_BUDGET.md
+            sgdk/out/R2_RESOURCE_SHA256.txt
           if-no-files-found: warn
