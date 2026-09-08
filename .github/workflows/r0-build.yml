@@ -11,7 +11,7 @@ jobs:
   build-r2:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
     steps:
@@ -52,6 +52,20 @@ jobs:
           PY
           mkdir -p sgdk/out
           sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png > sgdk/out/R2_RESOURCE_SHA256.txt
+
+      - name: Persist verified PNG binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png; then
+            echo 'Direct R2 PNG binaries already match repository.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png
+            git commit -m 'Store exact approved R2 PNGs as binary blobs [skip ci]'
+            git push origin HEAD:main
+          fi
 
       - name: Audit tile use
         shell: bash
