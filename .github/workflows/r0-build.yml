@@ -1,4 +1,4 @@
-name: R2 Targeted Fix SGDK CI
+name: R2 Refined Ambient Animation SGDK CI
 
 on:
   workflow_dispatch:
@@ -18,44 +18,123 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify R2 targeted fix
+      - name: Generate refined R2 animation assets
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          python3 sgdk/tools/build_refined_animation_assets.py
+
+      - name: Verify refined R2 animation assets
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
-          root=Path('sgdk/res')
-          src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
-          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
-          assert 'r2_flag_' not in src and 'r2_flag_' not in res
-          assert 'flagAnim' not in src
-          assert 'apply_enhanced_menu_palette' not in src
-          assert 'draw_river_frame' in src and 'draw_fire_frame' in src
-          assert 'r2_river_3' in res and 'r2_fire_3' in res
+          import hashlib
 
-          river=[Image.open(root/f'r2_river_{i}.png') for i in range(4)]
-          fire=[Image.open(root/f'r2_fire_{i}.png') for i in range(4)]
-          bg=Image.open(root/'r2_menu_bg.png')
-          pal=bg.getpalette()
-          for im in river+fire:
-              im.load(); assert im.mode=='P'; assert im.getpalette()==pal
-          for im in river:
-              for y in range(68,104):
-                  for x in range(56,80):
-                      assert (im.getpixel((x,y)) & 15)==0, ('water_on_bridge',x,y)
-          f0=fire[0]
-          for im in fire[1:]:
-              for y in range(22,40):
-                  for x in range(32):
-                      assert im.getpixel((x,y))==f0.getpixel((x,y)), ('moving_fire_base',x,y)
-          def diff(a,b): return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
-          assert min(diff(river[i],river[(i+1)%4]) for i in range(4)) >= 500
-          assert min(diff(fire[i],fire[(i+1)%4]) for i in range(4)) >= 30
-          print('R2 targeted fix checks PASS')
+          root=Path('sgdk/res')
+          bg=Image.open(root/'r2_menu_bg.png'); bg.load()
+          sel=Image.open(root/'r2_selector.png'); sel.load()
+          assert bg.mode=='P' and bg.size==(320,224)
+          assert sel.mode=='P' and sel.size==(144,16)
+          palette=bg.getpalette()
+          assert len(palette)>=192
+          assert hashlib.sha256(bytes(palette)).hexdigest() == 'b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+
+          river=[Image.open(root/f'r2_river_{i}.png') for i in range(8)]
+          flag=[Image.open(root/f'r2_flag_right_{i}.png') for i in range(8)]
+          top=[Image.open(root/f'r2_fire_top_{i}.png') for i in range(8)]
+          bottom=[Image.open(root/f'r2_fire_bottom_{i}.png') for i in range(8)]
+          for im in river+flag+top+bottom: im.load(); assert im.mode=='P'
+          assert all(im.size==(112,224) for im in river)
+          assert all(im.size==(32,40) for im in flag)
+          assert all(im.size==(40,48) for im in top)
+          assert all(im.size==(40,40) for im in bottom)
+
+          for im in river+flag+top+bottom:
+              assert max(im.getdata()) <= 15
+              assert 0 in set(im.getdata())
+
+          bgdata=list(bg.getdata())
+          allowed_global=set([4,5,6,7] + list(range(17,32)))
+          for fi,im in enumerate(river):
+              data=list(im.getdata())
+              for y in range(224):
+                  for x in range(112):
+                      v=data[y*112+x]
+                      if not v: continue
+                      assert bgdata[y*320+x] in allowed_global, ('river_on_nonwater',fi,x,y,bgdata[y*320+x])
+              for y in range(66,106):
+                  for x in range(54,82):
+                      assert data[y*112+x]==0, ('river_on_bridge',fi,x,y)
+
+          assert hashlib.sha256((root/'r2_menu_bg.png').read_bytes()).hexdigest() == '6c11dc420fd7d06dd4a128f4d277d088f5d11824d9517a4134ea05954e6b10ef'
+          assert hashlib.sha256((root/'r2_selector.png').read_bytes()).hexdigest() == '36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd'
+
+          def diff(a,b):
+              return sum(x!=y for x,y in zip(a.getdata(),b.getdata()))
+          for name,frames,minimum in (
+              ('river',river,80), ('flag',flag,10), ('fire_top',top,20), ('fire_bottom',bottom,12)):
+              diffs=[diff(frames[i],frames[(i+1)%8]) for i in range(8)]
+              assert min(diffs)>=minimum,(name,diffs,minimum)
+              print(name,'frame diffs',diffs)
+
+          for group in (top,bottom):
+              for im in group:
+                  data=list(im.getdata())
+                  assert 15 not in data
+                  assert data.count(14) <= 18
+
+          print('R2 refined ambient asset checks PASS')
           PY
           mkdir -p sgdk/out
+          sha256sum sgdk/res/r2_menu_bg.png sgdk/res/r2_selector.png \
+            sgdk/res/r2_river_*.png sgdk/res/r2_flag_right_*.png \
+            sgdk/res/r2_fire_top_*.png sgdk/res/r2_fire_bottom_*.png \
+            > sgdk/out/R2_RESOURCE_SHA256.txt
+
+      - name: Verify source contract and VRAM budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
+          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
+          for token in (
+              'R2_ANIM_FRAMES 8','R2_RIVER_HOLD_TICKS 7','R2_FLAG_HOLD_TICKS 8',
+              'R2_FIRE_TOP_HOLD_TICKS 5','R2_FIRE_BOTTOM_HOLD_TICKS 6',
+              'draw_river_frame','draw_flag_right_frame','draw_fire_top_frame','draw_fire_bottom_frame',
+              'TILE_ATTR_FULL(PAL1','TILE_ATTR_FULL(PAL3','r2_river_7','r2_flag_right_7',
+              'r2_fire_top_7','r2_fire_bottom_7','TILE_USER_MAX_INDEX','JOY_SUPPORT_3BTN'):
+              assert token in src, token
+          assert 'r2_flag_left_' not in src and 'r2_flag_left_' not in res
+          assert 'apply_enhanced_menu_palette' not in src
+          for prefix in ('r2_river_','r2_flag_right_','r2_fire_top_','r2_fire_bottom_'):
+              for i in range(8): assert f'IMAGE {prefix}{i}' in res
+
+          root=Path('sgdk/res')
+          def uniq(name):
+              im=Image.open(root/name); im.load(); s=set()
+              for y in range(0,im.height,8):
+                  for x in range(0,im.width,8):
+                      s.add(bytes(im.crop((x,y,x+8,y+8)).getdata()))
+              return len(s)
+          bg=uniq('r2_menu_bg.png'); patch=uniq('r2_top_right_patch.png'); sel=uniq('r2_selector.png')
+          river=max(uniq(f'r2_river_{i}.png') for i in range(8))
+          flag=max(uniq(f'r2_flag_right_{i}.png') for i in range(8))
+          top=max(uniq(f'r2_fire_top_{i}.png') for i in range(8))
+          bottom=max(uniq(f'r2_fire_bottom_{i}.png') for i in range(8))
+          total=bg+patch+sel+river+flag+top+bottom
+          Path('sgdk/out/R2_RESOURCE_BUDGET.md').write_text(
+              f'background={bg}\npatch={patch}\nselector={sel}\nriver={river}\nflag={flag}\nfire_top={top}\nfire_bottom={bottom}\nconservative_total={total}\n',
+              encoding='utf-8')
+          print('conservative unique tile slots',total)
+          assert total < 1500
+          PY
 
       - name: Pin SGDK 2.11
         shell: bash
@@ -63,7 +142,10 @@ jobs:
           set -euo pipefail
           docker pull "$SGDK_IMAGE"
           ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
           echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
 
       - name: Prepare reproducible builds
         shell: bash
@@ -84,16 +166,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -f /tmp/sgdk-r2-a/out/rom.bin
+          test -f /tmp/sgdk-r2-b/out/rom.bin
           cmp /tmp/sgdk-r2-a/out/rom.bin /tmp/sgdk-r2-b/out/rom.bin
           cp /tmp/sgdk-r2-a/out/rom.bin sgdk/out/rom.bin
           sha256sum sgdk/out/rom.bin | tee sgdk/out/R2_SHA256.txt
           python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R2_ROM_AUDIT.json
 
-      - name: Publish candidate
+      - name: Build report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
+          if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
+          cat > sgdk/out/R2_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R2 — Refined Ambient Animation Candidate
+          - Commit: ${GITHUB_SHA}
+          - SGDK: 2.11 pinned
+          - ROM size: ${ROM_SIZE}
+          - ROM SHA-256: ${ROM_SHA}
+          - Main menu typography/layout: unchanged
+          - Landscape color palette: unchanged
+          - River: 8-frame masked downward motion, slower and shore-confined
+          - Bridge/buildings: excluded from river animation
+          - Right flag: 8-frame muted PAL3 animation; cloth absent from static background
+          - Left flag: absent
+          - Upper fire: larger 8-frame flame, static wreck
+          - Lower fire: independent 8-frame flame, static glow removed
+          - R1 core: preserved
+          - Gate: TARGET PENDING owner emulator acceptance
+          REPORT
+
+      - name: Publish refined R2 candidate
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R2_Targeted_Fix_Candidate
+          name: Modern_Tanks_R2_Refined_Ambient_Candidate
           path: |
             sgdk/out/rom.bin
             sgdk/out/R2_SHA256.txt
             sgdk/out/R2_ROM_AUDIT.json
+            sgdk/out/R2_BUILD_REPORT.md
+            sgdk/out/R2_RESOURCE_SHA256.txt
+            sgdk/out/R2_RESOURCE_BUDGET.md
+            sgdk/out/R2_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R2_TOOLCHAIN_IMAGE_DIGEST.txt
+          if-no-files-found: warn
