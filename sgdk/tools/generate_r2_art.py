@@ -1,30 +1,58 @@
 from pathlib import Path
 import base64
+import hashlib
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / "art"
 RES = ROOT / "res"
 RES.mkdir(parents=True, exist_ok=True)
 
-# The locked project reference PNGs are never modified by the build. The
-# approved Mega Drive adaptation is stored as deterministic text-safe payloads.
+EXPECTED_BG_SHA256 = "3228dc767cfb2790fa5f60753f17ae5fa826a0eed41719340d4a93a1fffebae6"
+
+
 def decode_text_payload(parts, out_name):
     payload = "".join((ART / name).read_text(encoding="ascii") for name in parts)
     payload = "".join(payload.split())
     print("decode", out_name, "chars", len(payload), "parts", len(parts))
     data = base64.b64decode(payload, validate=True)
-    (RES / out_name).write_bytes(data)
+    out = RES / out_name
+    out.write_bytes(data)
+    return out
 
-# Background is split only to keep GitHub connector text writes lossless.
-decode_text_payload([
-    "r2_menu_bg.png.b64.00",
-    "r2_menu_bg.png.b64.00b",
+
+bg_path = decode_text_payload([
+    "r2_menu_bg.png.b64.000",
+    "r2_menu_bg.png.b64.001",
     "r2_menu_bg.png.b64.01",
     "r2_menu_bg.png.b64.02",
     "r2_menu_bg.png.b64.03",
 ], "r2_menu_bg.png")
 
-for i in range(4):
-    decode_text_payload([f"r2_sel_{i}.png.b64"], f"r2_sel_{i}.png")
+actual = hashlib.sha256(bg_path.read_bytes()).hexdigest()
+if actual != EXPECTED_BG_SHA256:
+    raise SystemExit(f"R2 background SHA mismatch: {actual}")
 
-print("decoded reference-faithful R2 assets", RES)
+bg = Image.open(bg_path)
+bg.load()
+if bg.mode != "P" or bg.size != (320, 224):
+    raise SystemExit(f"R2 background format mismatch: {bg.mode} {bg.size}")
+
+# Selector graphics are derived from the approved menu asset itself so they
+# share the exact same Mega Drive palette. No separate binary payload is used.
+palette = bg.getpalette()
+target = (251, 224, 73)
+yellow = min(
+    range(256),
+    key=lambda i: sum((palette[i * 3 + c] - target[c]) ** 2 for c in range(3)),
+)
+for i, y in enumerate((80, 96, 112, 128)):
+    sel = bg.crop((112, y, 216, y + 16))
+    sel.putpalette(palette)
+    d = ImageDraw.Draw(sel)
+    d.rectangle((0, 0, 103, 15), outline=yellow, width=1)
+    d.polygon([(1, 7), (5, 3), (5, 11)], fill=yellow)
+    d.polygon([(102, 7), (98, 3), (98, 11)], fill=yellow)
+    sel.save(RES / f"r2_sel_{i}.png", optimize=False)
+
+print("reference-faithful R2 assets ready", RES)
