@@ -41,7 +41,6 @@ jobs:
           rm -rf /tmp/sgdk-r0-a /tmp/sgdk-r0-b
           cp -a sgdk /tmp/sgdk-r0-a
           cp -a sgdk /tmp/sgdk-r0-b
-          # docker-sgdk runs as an unprivileged `m68k` user.
           chmod -R a+rwX /tmp/sgdk-r0-a /tmp/sgdk-r0-b
 
       - name: Build A with pinned SGDK 2.11 image ID
@@ -77,6 +76,7 @@ jobs:
           python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R0_ROM_AUDIT.json
 
       - name: Publish R0 ROM artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Modern_Tanks_R0_Hardware_Probe
