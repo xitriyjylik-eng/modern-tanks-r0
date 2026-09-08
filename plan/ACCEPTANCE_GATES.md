@@ -67,54 +67,67 @@ Target gate требовал 100 последовательных переход
 
 Итог: **R1 ACCEPTED / CLOSED.**
 
-## R2 — VISUAL REWORK 1 / BUILD/CI PASS / TARGET ACCEPTANCE PENDING
+## R2 — FINAL VISUAL CANDIDATE / CI PASS / TARGET ACCEPTANCE PENDING
 
 Stage: Main Menu Visual Target.
 
-### Target history
+### История visual rejection
 
-Первый R2 candidate технически прошёл CI, но был **визуально отклонён владельцем** после запуска в MD Emu Games Gen и прямого сравнения с `references/MAIN_MENU_REFERENCE.png`.
+Предыдущие R2 builds технически собирались, но были отклонены владельцем из-за слабого соответствия образцам: процедурный клетчатый battlefield, упрощённые танки, лишний нижний HUD, декоративный moving tank и недостаточная visual density.
 
-Этот build не является accepted R2 и больше не используется как visual candidate.
+Эти варианты больше не являются visual candidate.
 
-Основные причины rejection: недостаточная visual density, плоский logo, простой клетчатый battlefield, слишком широкая central panel, условные tank silhouettes и упрощённый bottom HUD.
+### Новый visual target владельца
 
-### Visual Rework 1 build evidence
+Старый визуальный подход заменён двумя новыми образцами из текущей сессии:
 
-- build commit `0442a22167097d4b9dc5964301e93fbf2f894234`;
-- GitHub Actions run `34182713358` — SUCCESS;
-- native-resolution R2 art generation PASS;
-- locked-art/source contract PASS;
-- two clean SGDK 2.11 builds PASS и byte-for-byte identical;
+- battlefield gameplay reference: top-down река/мост/лес/дороги/постройки/укрепления/кратеры/огонь/дым, насыщенный 16-bit pixel-art;
+- tank mini-sprite reference: T-1/T-2/T-3/T-4, 16x16 gameplay size, 8 направлений, один основной ствол, чёткие корпус/башня/гусеницы и разные silhouettes.
+
+Главное меню должно выглядеть частью того же мира, а не отдельным техническим mockup.
+
+### Current final candidate build evidence
+
+- build commit `d087d03275c658e4799afa53e395251083308669`;
+- GitHub Actions run `34201271457` — **SUCCESS**;
+- exact prepared background asset `320x224`, indexed-P, SHA-256 `5ec08a6cb60201367bc45becdf116f3efe71597762f5f25d7aa28b62ff6426ea`;
+- selector `144x16`, SHA-256 `36deb4395d061cc75f9972e0427b2c9b1ccf45ca2eb95992feac49a0737170fd`;
+- PAL0..PAL3 per-8x8-tile validation PASS; tile distribution `576 / 56 / 150 / 338`;
+- background unique indexed tiles `921`, selector `6` before ResComp duplicate/flip optimization;
+- artificial project graphics ceiling removed; only actual SGDK/VDP limits remain and runtime checks `TILE_USER_MAX_INDEX`;
+- two clean SGDK 2.11 builds PASS and byte-for-byte identical;
 - independent ROM audit PASS;
 - ROM size `131072` bytes;
-- ROM SHA-256 `5b6a711bc38255793950c0259b2e297d57fa0bc5978a1210fed4e4911619fe98`;
-- header checksum `0x3D61`;
+- ROM SHA-256 `e0b3a90b3a33c8e06bde7ec9749ef7f105ff38558ed3d6eb6b1c0dda5909773c`;
+- header checksum `0x49B6` equals required checksum `0x49B6`;
 - full-ROM XOR-fold `0x0000`.
 
-Visual Rework 1 содержит native 320×224 artwork с winding river/shoreline, forest clusters, bridges, brick/steel fortifications, craters, multiple tanks, shell/explosion/smoke scene, dimensional metallic logo, narrower reference-like menu panel, detailed T-1…T-4 strip, segmented stats и improved minimap.
+### Required R2 composition
+
+- full 320x224 battlefield-style background;
+- large `MODERN TANKS` logo;
+- steel/navy central panel;
+- `ИГРАТЬ / ГАРАЖ / СТАТИСТИКА / НАСТРОЙКИ`;
+- selector/navigation;
+- **no** lower `T-1..T-4 / stats / minimap` strip;
+- **no** detached decorative moving tank;
+- tank/class selection belongs to `ГАРАЖ`;
+- map/mission context belongs to mission/gameplay screens.
 
 ### Gate R2
 
-PASS только если владелец прямо принимает новый target screen после проверки в MD Emu Games Gen:
+PASS только после прямого решения владельца по фактическому ROM в MD Emu Games Gen:
 
-- screen comparison с `references/MAIN_MENU_REFERENCE.png` по композиции, visual density и 16-bit visual language;
-- крупный dimensional MODERN TANKS logo;
-- насыщенный battlefield background, а не tile-placeholder поле;
-- steel frame language;
-- четыре канонических русских пункта меню;
-- tank-class strip с различимыми T-1…T-4 silhouettes;
-- stats preview;
-- mini-map preview;
-- selector animation + subtle scripted background action;
-- нет пустых placeholder-панелей;
-- нет automatically downscaled dirty reference graphics;
-- menu bank полностью выгружается при переходе в TEST_BATTLE/GARAGE shell;
-- после нескольких unload/reload циклов сохраняется `ERR:00`;
-- нет VRAM/palette/sprite corruption;
-- free project pattern budget зафиксирован в `sgdk/res/R2_RESOURCE_BUDGET.md`.
-
-Полный target checklist: `tests/r2/R2_ACCEPTANCE_CHECKLIST.md`.
+- визуально меню принадлежит тому же миру, что новый gameplay reference;
+- фон имеет насыщенную читаемую реку/мост/лес/дороги/постройки/следы боя, без прежнего placeholder/cell look;
+- logo и steel/navy panel хорошо читаются;
+- четыре канонических русских пункта меню читаются;
+- Up/Down selector работает;
+- `ИГРАТЬ → TEST_BATTLE → B → MENU` работает;
+- `ГАРАЖ → GARAGE → B → MENU` работает;
+- menu bank unload/reload не вызывает VRAM/palette/sprite corruption;
+- после нескольких переходов нет ERR/corruption;
+- нижний HUD и декоративный moving tank отсутствуют.
 
 **R2 пока НЕ ACCEPTED. R3 BLOCKED до прямого target PASS владельца.**
 
