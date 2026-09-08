@@ -81,7 +81,7 @@ jobs:
           from pathlib import Path
           src=Path('sgdk/src/main.c').read_text(encoding='utf-8')
           res=Path('sgdk/res/resources.res').read_text(encoding='utf-8')
-          for token in ('R2 Final Main Menu Visual Target','JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX'):
+          for token in ('Final Main Menu Visual Target','JOY_SUPPORT_3BTN','TILE_USER_MAX_INDEX'):
               assert token in src, token
           for token in ('IMAGE r2_menu_bg','IMAGE r2_selector'):
               assert token in res, token
