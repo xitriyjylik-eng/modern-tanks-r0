@@ -2,16 +2,18 @@
 #include "resources.h"
 
 /*
- * Modern Tanks R2 — Final Main Menu Visual Target
- * Clean SGDK rebuild only. R1 core is accepted and preserved.
- * No old DEV code. No Granada assets/code.
+ * Modern Tanks R2 — Final Main Menu Visual Target, animated pass.
+ * Clean SGDK rebuild. R1 core remains accepted and preserved.
  *
- * Visual direction:
- * - native 320x224 Mega Drive presentation
- * - approved battlefield visual used as the direct art source
- * - 8bpp indexed image with per-8x8-tile PAL0..PAL3 selection
- * - no lower tank/stat/minimap strip
- * - no detached decorative moving tank
+ * Direct R2 requirements implemented here:
+ * - native 320x224 presentation
+ * - accepted Russian menu typography retained
+ * - top-right minimap removed from the menu background
+ * - higher-detail / higher-contrast battlefield background
+ * - two wind-driven flags
+ * - river ambience animated in a downward-flow cycle
+ * - burning wreck fire animation
+ * - no detached decorative tank and no lower stat/minimap strip
  */
 
 typedef enum
@@ -43,17 +45,23 @@ typedef struct
 #define R2_LOGIC_HZ 60
 #define R2_BOOT_TICKS 60
 #define R2_MENU_COUNT 4
+#define R2_ANIM_FRAMES 4
+#define R2_ANIM_HOLD_TICKS 7
 
-/* Selector overlay is 144x16 = 18x2 tiles, aligned to the baked menu rows. */
 #define R2_SELECTOR_X 11
 #define R2_SELECTOR_W 18
 #define R2_SELECTOR_H 2
-
-/*
- * PAL0 entry 15 is reserved exclusively for the selector gold.
- * Background art never uses PAL0 color 15, so the pulse does not alter the logo.
- */
 #define R2_SELECTOR_CRAM_INDEX 15
+
+/* Overlay positions are tile aligned to the native 320x224 composition. */
+#define R2_RIVER_X 0
+#define R2_RIVER_Y 0
+#define R2_FLAG_LEFT_X 2
+#define R2_FLAG_LEFT_Y 4
+#define R2_FLAG_RIGHT_X 36
+#define R2_FLAG_RIGHT_Y 14
+#define R2_FIRE_X 31
+#define R2_FIRE_Y 6
 
 static GameState currentState = STATE_BOOT;
 static ResourceBank activeBank = BANK_NONE;
@@ -69,12 +77,39 @@ static u16 bankGeneration = 0;
 static u16 errorCount = 0;
 static const char *lastError = "NONE";
 
+static u16 patchTileBase = 0;
 static u16 selectorTileBase = 0;
+static u16 riverTileBase = 0;
+static u16 flagLeftTileBase = 0;
+static u16 flagRightTileBase = 0;
+static u16 fireTileBase = 0;
 static u16 selectorPulse = 0;
+static u16 menuAnimTick = 0;
+static u16 menuAnimFrame = 0;
 static bool menuArtLoaded = FALSE;
 
 /* Native pixel Y rows 88/104/120/136 -> tile rows 11/13/15/17. */
 static const u16 selectorY[R2_MENU_COUNT] = {11, 13, 15, 17};
+
+static const Image * const riverFrames[R2_ANIM_FRAMES] =
+{
+    &r2_river_0, &r2_river_1, &r2_river_2, &r2_river_3
+};
+
+static const Image * const flagLeftFrames[R2_ANIM_FRAMES] =
+{
+    &r2_flag_left_0, &r2_flag_left_1, &r2_flag_left_2, &r2_flag_left_3
+};
+
+static const Image * const flagRightFrames[R2_ANIM_FRAMES] =
+{
+    &r2_flag_right_0, &r2_flag_right_1, &r2_flag_right_2, &r2_flag_right_3
+};
+
+static const Image * const fireFrames[R2_ANIM_FRAMES] =
+{
+    &r2_fire_0, &r2_fire_1, &r2_fire_2, &r2_fire_3
+};
 
 static ResourceBank state_bank(GameState state)
 {
@@ -115,6 +150,30 @@ static bool palettes_are_black(void)
         if (colors[i] != 0) return FALSE;
 
     return TRUE;
+}
+
+static u16 max4(u16 a, u16 b, u16 c, u16 d)
+{
+    u16 m = (a > b) ? a : b;
+    if (c > m) m = c;
+    if (d > m) m = d;
+    return m;
+}
+
+static void apply_enhanced_menu_palette(void)
+{
+    /* PAL3 refinement: stronger terrain contrast, fire and highlights. */
+    PAL_setColor(51, RGB24_TO_VDPCOLOR(0x706B34));
+    PAL_setColor(52, RGB24_TO_VDPCOLOR(0x855F38));
+    PAL_setColor(53, RGB24_TO_VDPCOLOR(0x6C5A35));
+    PAL_setColor(54, RGB24_TO_VDPCOLOR(0x4E5825));
+    PAL_setColor(55, RGB24_TO_VDPCOLOR(0x792D1E));
+    PAL_setColor(56, RGB24_TO_VDPCOLOR(0xD02D18));
+    PAL_setColor(57, RGB24_TO_VDPCOLOR(0xF45A14));
+    PAL_setColor(58, RGB24_TO_VDPCOLOR(0xFF911C));
+    PAL_setColor(59, RGB24_TO_VDPCOLOR(0x707060));
+    PAL_setColor(60, RGB24_TO_VDPCOLOR(0x473A2B));
+    PAL_setColor(61, RGB24_TO_VDPCOLOR(0x31261D));
 }
 
 static void resource_bank_unload(void)
@@ -179,18 +238,59 @@ static void draw_selector(u16 newIndex, u16 oldIndex, bool firstDraw)
                     TRUE);
 }
 
+static void draw_menu_ambient(u16 frame)
+{
+    /* River first; flag/fire overlays then sit above it. */
+    VDP_drawImageEx(BG_A,
+                    riverFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, riverTileBase),
+                    R2_RIVER_X,
+                    R2_RIVER_Y,
+                    FALSE,
+                    TRUE);
+
+    VDP_drawImageEx(BG_A,
+                    flagLeftFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, flagLeftTileBase),
+                    R2_FLAG_LEFT_X,
+                    R2_FLAG_LEFT_Y,
+                    FALSE,
+                    TRUE);
+
+    VDP_drawImageEx(BG_A,
+                    flagRightFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, flagRightTileBase),
+                    R2_FLAG_RIGHT_X,
+                    R2_FLAG_RIGHT_Y,
+                    FALSE,
+                    TRUE);
+
+    VDP_drawImageEx(BG_A,
+                    fireFrames[frame],
+                    TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, fireTileBase),
+                    R2_FIRE_X,
+                    R2_FIRE_Y,
+                    FALSE,
+                    TRUE);
+}
+
 static void draw_menu_art(void)
 {
     u16 bgTiles;
+    u16 patchTiles;
     u16 selectorTiles;
+    u16 riverTiles;
+    u16 flagLeftTiles;
+    u16 flagRightTiles;
+    u16 fireTiles;
+    u16 nextTile;
 
     VDP_setTextPlane(BG_A);
     VDP_setTextPriority(TRUE);
 
     /*
-     * r2_menu_bg is an indexed 8bpp IMAGE.
-     * ResComp uses bits 4-5 of each tile's indices to select PAL0..PAL3,
-     * so the static menu can use all four Mega Drive sub-palettes.
+     * 8bpp indexed source: upper two index bits choose PAL0..PAL3 per 8x8 tile.
+     * This keeps the maximum-detail 64-color menu art within normal Mega Drive rules.
      */
     VDP_drawImageEx(BG_B,
                     &r2_menu_bg,
@@ -201,17 +301,63 @@ static void draw_menu_art(void)
                     TRUE);
 
     bgTiles = r2_menu_bg.tileset->numTile;
-    selectorTiles = r2_selector.tileset->numTile;
-    selectorTileBase = TILE_USER_INDEX + bgTiles;
+    patchTiles = r2_top_right_patch.tileset->numTile;
+    patchTileBase = TILE_USER_INDEX + bgTiles;
 
-    /* Actual SGDK/VDP tile-space guard; no arbitrary project ceiling. */
-    if ((selectorTileBase + selectorTiles - 1) > TILE_USER_MAX_INDEX)
+    /* Replace the old top-right minimap directly with battlefield terrain. */
+    VDP_drawImageEx(BG_B,
+                    &r2_top_right_patch,
+                    TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, patchTileBase),
+                    29,
+                    0,
+                    FALSE,
+                    TRUE);
+
+    /* Same indexed art, stronger PAL3 values: no rescaling or generated substitute. */
+    apply_enhanced_menu_palette();
+
+    selectorTiles = r2_selector.tileset->numTile;
+    riverTiles = max4(r2_river_0.tileset->numTile,
+                      r2_river_1.tileset->numTile,
+                      r2_river_2.tileset->numTile,
+                      r2_river_3.tileset->numTile);
+    flagLeftTiles = max4(r2_flag_left_0.tileset->numTile,
+                         r2_flag_left_1.tileset->numTile,
+                         r2_flag_left_2.tileset->numTile,
+                         r2_flag_left_3.tileset->numTile);
+    flagRightTiles = max4(r2_flag_right_0.tileset->numTile,
+                          r2_flag_right_1.tileset->numTile,
+                          r2_flag_right_2.tileset->numTile,
+                          r2_flag_right_3.tileset->numTile);
+    fireTiles = max4(r2_fire_0.tileset->numTile,
+                     r2_fire_1.tileset->numTile,
+                     r2_fire_2.tileset->numTile,
+                     r2_fire_3.tileset->numTile);
+
+    selectorTileBase = patchTileBase + patchTiles;
+    nextTile = selectorTileBase + selectorTiles;
+    riverTileBase = nextTile;
+    nextTile += riverTiles;
+    flagLeftTileBase = nextTile;
+    nextTile += flagLeftTiles;
+    flagRightTileBase = nextTile;
+    nextTile += flagRightTiles;
+    fireTileBase = nextTile;
+    nextTile += fireTiles;
+
+    if ((nextTile - 1) > TILE_USER_MAX_INDEX)
     {
         set_error("R2_VRAM_TILES");
         menuArtLoaded = FALSE;
         return;
     }
 
+    menuAnimTick = 0;
+    menuAnimFrame = 0;
+    draw_menu_ambient(menuAnimFrame);
+
+    /* River image spans 14 tile columns and can rewrite transparent BG_A cells,
+       therefore selector is always redrawn after each ambient frame. */
     draw_selector(menuIndex, menuIndex, TRUE);
 
     selectorPulse = 0;
@@ -223,7 +369,6 @@ static void update_menu_visuals(void)
     if (!menuArtLoaded) return;
 
     selectorPulse++;
-
     if ((selectorPulse & 15) == 0)
     {
         if (selectorPulse & 16)
@@ -231,13 +376,23 @@ static void update_menu_visuals(void)
         else
             PAL_setColor(R2_SELECTOR_CRAM_INDEX, RGB24_TO_VDPCOLOR(0xC9A72F));
     }
+
+    menuAnimTick++;
+    if (menuAnimTick >= R2_ANIM_HOLD_TICKS)
+    {
+        menuAnimTick = 0;
+        menuAnimFrame++;
+        if (menuAnimFrame >= R2_ANIM_FRAMES) menuAnimFrame = 0;
+        draw_menu_ambient(menuAnimFrame);
+        draw_selector(menuIndex, menuIndex, TRUE);
+    }
 }
 
 static void draw_boot(void)
 {
     VDP_setTextPalette(PAL0);
     VDP_drawText("MODERN TANKS", 14, 5);
-    VDP_drawText("R2 FINAL VISUAL TARGET", 8, 9);
+    VDP_drawText("R2 ANIMATED MENU", 11, 9);
     VDP_drawText("R1 CORE ACCEPTED", 11, 13);
     VDP_drawText("LOADING MENU BANK...", 10, 17);
 }
@@ -246,7 +401,7 @@ static void draw_title(void)
 {
     VDP_setTextPalette(PAL0);
     VDP_drawText("MODERN TANKS", 14, 6);
-    VDP_drawText("R2 FINAL VISUAL BUILD", 9, 10);
+    VDP_drawText("R2 ANIMATED MENU", 11, 10);
     VDP_drawText("PRESS START OR A", 11, 15);
 }
 
@@ -361,7 +516,7 @@ static void handle_input_frame(void)
             {
                 if (menuIndex == 0) change_state(STATE_TEST_BATTLE);
                 else if (menuIndex == 1) change_state(STATE_GARAGE);
-                /* STATISTICS and OPTIONS remain visual-only until their planned stages. */
+                /* Statistics and options remain visual-only until their planned stages. */
             }
             break;
 
