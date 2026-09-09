@@ -1,0 +1,175 @@
+    if (!worldInBounds(ax, ay) || !worldInBounds(ax + WT_TREE_W - 1, ay + WT_TREE_H - 1)) return FALSE;
+    if ((ax & (WT_TREE_W - 1)) != 0 || (ay % WT_TREE_H) != 0) return FALSE;
+    if (!forestField(ax + 1, ay + 1) || !forestField(ax + 2, ay + 1)) return FALSE;
+    return (hash16(ax >> 2, ay / WT_TREE_H) & 7) < 5;
+}
+
+static u16 metaTileId(u16 base, u16 variant, u16 metaW, u16 metaH, s16 wx, s16 wy)
+{
+    u16 lx = ((u16)wx) % metaW;
+    u16 ly = ((u16)wy) % metaH;
+    return base + variant * metaW * metaH + ly * metaW + lx;
+}
+
+static u16 baseTileAttr(s16 wx, s16 wy)
+{
+    u16 variant, id, pal;
+
+    if (!worldInBounds(wx, wy))
+        return TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, worldTileBase + WT_BLANK);
+
+    if (isBridge(wx, wy))
+    {
+        variant = hash16(wx >> 2, wy >> 2) % WT_BRIDGE_META;
+        id = metaTileId(WT_BRIDGE_BASE, variant, WT_BRIDGE_W, WT_BRIDGE_H, wx, wy);
+        pal = PAL3;
+    }
+    else if (isWater(wx, wy))
+    {
+        u16 local = ((((u16)wy) & 1) << 1) | (((u16)wx) & 1);
+        variant = hash16(wx >> 1, wy >> 1) % WT_WATER_VARIANTS;
+        id = WT_WATER_BASE + (variant * WT_WATER_FRAMES + waterFrame) * 4 + local;
+        pal = PAL1;
+    }
+    else if (isShore(wx, wy))
+    {
+        s16 center = riverCenterX(wy);
+        bool left = wx < center;
+        s16 dist = riverDistance(wx, wy);
+        u16 lx = left ? (u16)(5 - dist) : (u16)(dist - 4);
+        if (lx > 3) lx = 3;
+        u16 ly = ((u16)wy) & 3;
+        variant = (left ? 0 : WT_SHORE_VARIANTS_PER_SIDE) + (hash16(wy >> 2, left ? 7 : 19) % WT_SHORE_VARIANTS_PER_SIDE);
+        id = WT_SHORE_BASE + variant * 16 + ly * 4 + lx;
+        pal = PAL3;
+    }
+    else if (isRoad(wx, wy))
+    {
+        variant = hash16(wx >> 2, wy >> 2) % WT_ROAD_META;
+        id = metaTileId(WT_ROAD_BASE, variant, WT_ROAD_W, WT_ROAD_H, wx, wy);
+        pal = PAL3;
+    }
+    else
+    {
+        variant = hash16(wx >> 2, wy >> 2) % WT_GRASS_META;
+        id = metaTileId(WT_GRASS_BASE, variant, WT_GRASS_W, WT_GRASS_H, wx, wy);
+        pal = PAL2;
+    }
+
+    return TILE_ATTR_FULL(pal, FALSE, FALSE, FALSE, worldTileBase + id);
+}
+
+static u16 overlayTileAttr(s16 wx, s16 wy)
+{
+    s16 ax, ay;
+    u16 h;
+
+    if (!worldInBounds(wx, wy))
+        return TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, worldTileBase + WT_BLANK);
+
+    /* 32x24 tree frames: preserve the full 4x3 tile footprint. */
+    ax = wx - (wx & (WT_TREE_W - 1));
+    ay = wy - (wy % WT_TREE_H);
+    if (hasTreeAnchor(ax, ay))
+    {
+        u16 treeHash = hash16(ax, ay);
+        u16 variant = (treeHash >> 1) % WT_TREE_VARIANTS;
+        u16 phase = (treeHash >> 4) % WT_TREE_FRAMES;
+        u16 frame = (treeFrame + phase) % WT_TREE_FRAMES;
+        u16 q = (u16)((wy - ay) * WT_TREE_W + (wx - ax));
+        return TILE_ATTR_FULL(PAL2, TRUE, FALSE, FALSE,
+                              worldTileBase + WT_TREE_BASE +
+                              (variant * WT_TREE_FRAMES + frame) * WT_TREE_FRAME_TILES + q);
+    }
+
+    /* Rare 32x24 structures are also emitted as coherent metatiles. */
+    ax = wx - (wx & (WT_STRUCT_W - 1));
+    ay = wy - (wy % WT_STRUCT_H);
+    if (worldInBounds(ax + WT_STRUCT_W - 1, ay + WT_STRUCT_H - 1) &&
+        !forestField(ax + 1, ay + 1) && !isRoad(ax + 1, ay + 1) &&
+        !isWater(ax + 1, ay + 1) && !isShore(ax + 1, ay + 1))
+    {
+        h = hash16(ax >> 2, ay / WT_STRUCT_H);
+        if ((h & 1023) < 26)
+        {
+            u16 variant = (h >> 10) % WT_STRUCT_META;
+            u16 q = (u16)((wy - ay) * WT_STRUCT_W + (wx - ax));
+            return TILE_ATTR_FULL(PAL3, TRUE, FALSE, FALSE,
+                                  worldTileBase + WT_STRUCT_BASE + variant * 12 + q);
+        }
+    }
+
+    /* Small rocks/bushes are 16x16 and stay internally coherent. */
+    ax = wx - (wx & 1);
+    ay = wy - (wy & 1);
+    if (!isWater(wx, wy) && !isShore(wx, wy) && !isRoad(wx, wy))
+    {
+        h = hash16(ax >> 1, ay >> 1);
+        if ((h & 255) < 13)
+        {
+            u16 variant = (h >> 8) % WT_DECOR_META;
+            u16 q = (u16)((wy - ay) * WT_DECOR_W + (wx - ax));
+            {
+                u16 decorPal = (variant < 8) ? PAL0 : ((variant < 16) ? PAL2 : PAL3);
+                return TILE_ATTR_FULL(decorPal, TRUE, FALSE, FALSE,
+                                      worldTileBase + WT_DECOR_BASE + variant * 4 + q);
+            }
+        }
+    }
+
+    /* Sparse battlefield detail without procedural visual noise. */
+    if (!isWater(wx, wy) && !isShore(wx, wy) && !isRoad(wx, wy))
+    {
+        h = hash16(wx, wy);
+        if ((h & 1023) < 30)
+        {
+            u16 extra = (h >> 6) % WT_EXTRA_COUNT;
+            u16 typ = extra & 7;
+            u16 extraPal = (typ <= 3) ? PAL3 : ((typ <= 5) ? PAL2 : PAL0);
+            return TILE_ATTR_FULL(extraPal, TRUE, FALSE, FALSE,
+                                  worldTileBase + WT_EXTRA_BASE + extra);
+        }
+    }
+
+    return TILE_ATTR_FULL(PAL0, FALSE, FALSE, FALSE, worldTileBase + WT_BLANK);
+}
+
+static void setWorldCell(s16 wx, s16 wy)
+{
+    u16 px = ((u16)wx) & (R3_PLANE_W - 1);
+    u16 py = ((u16)wy) & (R3_PLANE_H - 1);
+    VDP_setTileMapXY(BG_B, baseTileAttr(wx, wy), px, py);
+    VDP_setTileMapXY(BG_A, overlayTileAttr(wx, wy), px, py);
+}
+
+static void streamColumn(s16 wx)
+{
+    s16 y;
+    for (y = loadedOriginY; y < (loadedOriginY + R3_PLANE_H); y++) setWorldCell(wx, y);
+}
+
+static void streamRow(s16 wy)
+{
+    s16 x;
+    for (x = loadedOriginX; x < (loadedOriginX + R3_PLANE_W); x++) setWorldCell(x, wy);
+}
+
+static void fillRing(void)
+{
+    s16 x, y;
+    for (y = loadedOriginY; y < (loadedOriginY + R3_PLANE_H); y++)
+        for (x = loadedOriginX; x < (loadedOriginX + R3_PLANE_W); x++)
+            setWorldCell(x, y);
+}
+
+static s32 cameraLeft(void) { return cameraCenterX - (R3_BATTLEFIELD_WIDTH_PX / 2); }
+static s32 cameraTop(void)  { return cameraCenterY - (R3_BATTLEFIELD_HEIGHT_PX / 2); }
+
+static void applyScroll(void)
+{
+    s16 sx = (s16)(cameraLeft() & 511);
+    s16 sy = (s16)(cameraTop() & 255);
+    VDP_setHorizontalScroll(BG_A, -sx);
+    VDP_setHorizontalScroll(BG_B, -sx);
+    /* SGDK positive vertical value moves the plane up, matching camera-down. */
+    VDP_setVerticalScroll(BG_A, sy);
