@@ -18,11 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate R3 assets
+      - name: Restore accepted R2 assets and generate R3 assets
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          python3 sgdk/tools/build_refined_animation_assets.py
           python3 sgdk/tools/build_r3_assets.py
           python3 sgdk/tools/verify_r3_assets.py
           python3 sgdk/tools/test_r3_world.py
@@ -35,7 +36,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import hashlib, json
+          import hashlib
           from PIL import Image
           root=Path('sgdk')
           r2=Image.open(root/'res/r2_menu_bg.png'); r2.load()
