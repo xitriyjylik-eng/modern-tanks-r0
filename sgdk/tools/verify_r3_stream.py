@@ -8,20 +8,20 @@ SRC = ROOT / "src"
 WORLD_W = 960
 WORLD_H = 960
 WORLD_TILES = (WORLD_W // 8) * (WORLD_H // 8)
-CHUNK_BYTES = 1800 * 32
+CHUNK_BYTES = 480 * 32
 
 # Runtime uses the raw uncompressed ROM data directly.
 # The authored source PNG is intentionally not required for CI/build.
-for i in range(8):
-    p = RES / f"r3_target_world_tiles_{i}.bin"
+for i in range(30):
+    p = RES / f"r3_target_world_tiles_{i:02d}.bin"
     assert p.stat().st_size == CHUNK_BYTES, (p, p.stat().st_size)
 
 banks = RES / "r3_target_world_banks.bin"
 assert banks.stat().st_size == WORLD_TILES, banks.stat().st_size
 
 res = (RES / "resources.res").read_text(encoding="utf-8")
-for i in range(8):
-    token = f'BIN r3_target_world_tiles_{i} "r3_target_world_tiles_{i}.bin" 4 4 0 NONE FALSE'
+for i in range(30):
+    token = f'BIN r3_target_world_tiles_{i:02d} "r3_target_world_tiles_{i:02d}.bin" 4 4 0 NONE FALSE'
     assert token in res, token
 assert 'BIN r3_target_world_banks "r3_target_world_banks.bin" 2 2 0 NONE FALSE' in res
 
