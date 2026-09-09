@@ -57,11 +57,23 @@ IMAGE r2_trees_11 "r2_trees_11.png" FAST ALL
 # R3 high-detail streamed world: raw 4bpp tile patterns + per-tile palette bank, no compression
 BIN r3_target_world_banks "r3_target_world_banks.bin" 2 2 0 NONE FALSE
 
-BIN r3_target_world_tiles_0 "r3_target_world_tiles_0.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_1 "r3_target_world_tiles_1.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_2 "r3_target_world_tiles_2.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_3 "r3_target_world_tiles_3.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_4 "r3_target_world_tiles_4.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_5 "r3_target_world_tiles_5.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_6 "r3_target_world_tiles_6.bin" 4 4 0 NONE FALSE
-BIN r3_target_world_tiles_7 "r3_target_world_tiles_7.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_00 "r3_target_world_tiles_00.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_01 "r3_target_world_tiles_01.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_02 "r3_target_world_tiles_02.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_03 "r3_target_world_tiles_03.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_04 "r3_target_world_tiles_04.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_05 "r3_target_world_tiles_05.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_06 "r3_target_world_tiles_06.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_07 "r3_target_world_tiles_07.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_08 "r3_target_world_tiles_08.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_09 "r3_target_world_tiles_09.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_10 "r3_target_world_tiles_10.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_11 "r3_target_world_tiles_11.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_12 "r3_target_world_tiles_12.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_13 "r3_target_world_tiles_13.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_14 "r3_target_world_tiles_14.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_15 "r3_target_world_tiles_15.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_16 "r3_target_world_tiles_16.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_17 "r3_target_world_tiles_17.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_18 "r3_target_world_tiles_18.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_19 "r3_target_world_tiles_19.bin" 4 4 0 NONE FALSE
