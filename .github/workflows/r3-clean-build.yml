@@ -1,0 +1,129 @@
+name: R3 Clean Battle Renderer SGDK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [r3-clean]
+    paths:
+      - 'sgdk/**'
+      - '.github/workflows/r3-clean-build.yml'
+
+jobs:
+  build-r3:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate R3 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 sgdk/tools/build_r3_assets.py
+          python3 sgdk/tools/verify_r3_assets.py
+          python3 sgdk/tools/test_r3_world.py
+          mkdir -p sgdk/out
+          sha256sum sgdk/res/r3_world_tiles.png sgdk/res/r3_hud_tiles.png | tee sgdk/out/R3_RESOURCE_SHA256.txt
+
+      - name: Verify accepted R2 palette and R3 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          from PIL import Image
+          root=Path('sgdk')
+          r2=Image.open(root/'res/r2_menu_bg.png'); r2.load()
+          assert hashlib.sha256(bytes(r2.getpalette())).hexdigest()=='b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          src=(root/'src/battle/battle_r3.c').read_text(encoding='utf-8')
+          hdr=(root/'inc/battle_r3.h').read_text(encoding='utf-8')
+          main=(root/'src/main.c').read_text(encoding='utf-8')
+          res=(root/'res/resources.res').read_text(encoding='utf-8')
+          for token in ('8192','R3_PLANE_W 64','R3_PLANE_H 32','BG_A','BG_B','WINDOW','R3_TREE_HOLD_TICKS','R3_WATER_HOLD_TICKS'):
+              assert token in src or token in hdr, token
+          for token in ('R3_battleEnter','R3_battleLeave','R3_battleSetInput','R3_battleUpdate'):
+              assert token in main, token
+          assert 'TILESET r3_world_tiles' in res and 'TILESET r3_hud_tiles' in res
+          print('R3 source contract PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r3-a /tmp/r3-b
+          cp -a sgdk /tmp/r3-a
+          cp -a sgdk /tmp/r3-b
+          rm -rf /tmp/r3-a/out /tmp/r3-b/out
+          mkdir -p /tmp/r3-a/out /tmp/r3-b/out
+          chmod -R a+rwX /tmp/r3-a /tmp/r3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/r3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/r3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/r3-a/out/rom.bin
+          test -f /tmp/r3-b/out/rom.bin
+          cmp /tmp/r3-a/out/rom.bin /tmp/r3-b/out/rom.bin
+          cp /tmp/r3-a/out/rom.bin sgdk/out/Modern_Tanks_R3_CANDIDATE.bin
+          sha256sum sgdk/out/Modern_Tanks_R3_CANDIDATE.bin | tee sgdk/out/R3_SHA256.txt
+          stat -c '%s' sgdk/out/Modern_Tanks_R3_CANDIDATE.bin | tee sgdk/out/R3_ROM_SIZE.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/Modern_Tanks_R3_CANDIDATE.bin | tee sgdk/out/R3_ROM_AUDIT.json
+
+      - name: Build report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p sgdk/out
+          SHA=NOT_BUILT; SIZE=NOT_BUILT
+          if [ -f sgdk/out/Modern_Tanks_R3_CANDIDATE.bin ]; then
+            SHA="$(sha256sum sgdk/out/Modern_Tanks_R3_CANDIDATE.bin|awk '{print $1}')"
+            SIZE="$(stat -c '%s' sgdk/out/Modern_Tanks_R3_CANDIDATE.bin)"
+          fi
+          cat > sgdk/out/R3_BUILD_REPORT.md <<EOF
+          # Modern Tanks R3 — clean candidate
+          - Base accepted R2: a1faa7d567ceb7f5506005b354da28f5c1ea0cee
+          - Branch: r3-clean
+          - Commit: ${GITHUB_SHA}
+          - World: 8192x8192 px, streamed 64x32 ring tilemap
+          - Battlefield: 224x192; HUD: right 96 px; log: bottom 32 px
+          - Visual language: accepted R2 64-color palette
+          - Trees: 12-phase subtle motion; water: 8-phase animation
+          - ROM size: ${SIZE}
+          - ROM SHA-256: ${SHA}
+          - Status: CANDIDATE until emulator visual acceptance
+          EOF
+
+      - name: Publish R3 candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_Clean_Candidate
+          path: |
+            sgdk/out/Modern_Tanks_R3_CANDIDATE.bin
+            sgdk/out/R3_*.txt
+            sgdk/out/R3_*.json
+            sgdk/out/R3_BUILD_REPORT.md
+          if-no-files-found: warn
