@@ -42,8 +42,8 @@ jobs:
           echo "$PATCH_SHA  /tmp/R3_SOURCE_IMPLEMENTATION.patch" | sha256sum -c -
           test "$(wc -c < /tmp/R3_SOURCE_IMPLEMENTATION.patch)" -eq 37792
           cp /tmp/R3_SOURCE_IMPLEMENTATION.patch sgdk/out/R3_SOURCE_IMPLEMENTATION.patch
-          git apply --check /tmp/R3_SOURCE_IMPLEMENTATION.patch
-          git apply /tmp/R3_SOURCE_IMPLEMENTATION.patch
+          git apply --check --directory=sgdk /tmp/R3_SOURCE_IMPLEMENTATION.patch
+          git apply --directory=sgdk /tmp/R3_SOURCE_IMPLEMENTATION.patch
           git diff --check
           git status --short
 
