@@ -34,7 +34,7 @@ jobs:
             r3_build_payload.part_008 \
             r3_build_payload.part_009 \
             | base64 -d > /tmp/r3_payload.tar.gz
-          printf '%s  %s\n' '1085a8164be345f7a4b0ce03693e5fb18ec3c13c861824d8f5d94dd189292297' '/tmp/r3_payload.tar.gz' | sha256sum -c -
+          printf '%s  %s\n' '67340931c59314692e607f066b2ade631f386e36e50295b1c5bc83d23b828fff' '/tmp/r3_payload.tar.gz' | sha256sum -c -
           tar -xzf /tmp/r3_payload.tar.gz -C .
           test -f sgdk/res/r2_menu_bg.png
           test -f sgdk/res/r3_manual_ground.png
