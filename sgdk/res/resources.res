@@ -53,3 +53,5 @@ IMAGE r2_trees_8 "r2_trees_8.png" FAST ALL
 IMAGE r2_trees_9 "r2_trees_9.png" FAST ALL
 IMAGE r2_trees_10 "r2_trees_10.png" FAST ALL
 IMAGE r2_trees_11 "r2_trees_11.png" FAST ALL
+TILESET r3_world_tiles "r3_world_tiles.png" NONE NONE
+TILESET r3_hud_tiles "r3_hud_tiles.png" NONE NONE
