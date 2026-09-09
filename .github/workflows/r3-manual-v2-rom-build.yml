@@ -1,0 +1,140 @@
+name: R3 Manual V2 ROM Build
+
+on:
+  pull_request:
+    paths:
+      - 'r3_payload3.part_*'
+      - 'r3_build_payload.part_*'
+      - 'r3_overrides/**'
+      - '.github/workflows/r3-manual-v2-rom-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-r3-manual-v2:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore exact R2 baseline plus manual R3 V2 authored field
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            r3_payload3.part_000 \
+            r3_build_payload.part_002 \
+            r3_build_payload.part_003 \
+            r3_build_payload.part_004 \
+            r3_build_payload.part_005 \
+            r3_build_payload.part_006 \
+            r3_build_payload.part_007 \
+            r3_build_payload.part_008 \
+            r3_build_payload.part_009 \
+            | base64 -d > /tmp/r3_payload.tar.gz
+          printf '%s  %s\n' '67340931c59314692e607f066b2ade631f386e36e50295b1c5bc83d23b828fff' '/tmp/r3_payload.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/r3_payload.tar.gz -C .
+          cp r3_overrides/resources.res sgdk/res/resources.res
+          test -f sgdk/res/r2_menu_bg.png
+          test -f sgdk/res/r3_manual_ground.png
+          test -f sgdk/src/battle/battle_r3_manual.c
+          test "$(wc -c < sgdk/res/resources.res)" -gt 3000
+          echo "payload restored and ASCII-safe resource manifest applied"
+
+      - name: Verify manual authored world contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 sgdk/tools/verify_r3_manual.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          s=Path('sgdk/src/battle/battle_r3_manual.c').read_text(encoding='utf-8').lower()
+          for bad in ('hash16','valuenoise','random(','rand(','rivercenter','forestfield','refreshvisibleanimatedcells','drawminimap'):
+              assert bad not in s,bad
+          assert 'map_create' in s and 'map_scrollto' in s and 'smoothcameraaxis' in s
+          bg=Path('sgdk/res/r2_menu_bg.png').read_bytes()
+          assert hashlib.sha256(bg).hexdigest()=='2f1e69a776957bae113d1eb24df9564c99855459f8d661a656291775730917ff'
+          manifest=Path('sgdk/res/resources.res').read_bytes()
+          assert all(b < 128 for b in manifest), 'resources.res must remain ASCII for ResComp compatibility'
+          print('manual runtime contract PASS; accepted R2 menu exact hash PASS; resource manifest ASCII PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          mkdir -p sgdk/out
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}' > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+          cp -a sgdk /tmp/sgdk-r3-a
+          cp -a sgdk /tmp/sgdk-r3-b
+          chmod -R a+rwX /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/sgdk-r3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/sgdk-r3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/sgdk-r3-a/out/rom.bin
+          test -f /tmp/sgdk-r3-b/out/rom.bin
+          cmp /tmp/sgdk-r3-a/out/rom.bin /tmp/sgdk-r3-b/out/rom.bin
+          cp /tmp/sgdk-r3-a/out/rom.bin sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin
+          sha256sum sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin | tee sgdk/out/R3_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin | tee sgdk/out/R3_ROM_AUDIT.json
+          stat -c '%s' sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin | tee sgdk/out/R3_ROM_SIZE.txt
+
+      - name: Build report
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(sha256sum sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin | awk '{print $1}')"
+          SIZE="$(stat -c '%s' sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin)"
+          cat > sgdk/out/R3_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R3 Manual V2
+          - Commit: ${GITHUB_SHA}
+          - SGDK: 2.11
+          - ROM size: ${SIZE}
+          - ROM SHA-256: ${SHA}
+          - Accepted R2 main menu: preserved exact resource
+          - Gameplay field: static authored 1024x1024 map
+          - Runtime procedural terrain: absent
+          - Runtime random/noise/hash terrain generation: absent
+          - Runtime fullscreen terrain scans: absent
+          - Camera: per-frame fixed-point smooth follow using SGDK MAP engine
+          - HUD: fixed right and bottom panels
+          - Art source: authored/static; no image-generation step in build
+          REPORT
+
+      - name: Publish ready ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_MANUAL_V2_READY_ROM
+          path: |
+            sgdk/out/Modern_Tanks_R3_MANUAL_V2.bin
+            sgdk/out/R3_SHA256.txt
+            sgdk/out/R3_ROM_AUDIT.json
+            sgdk/out/R3_ROM_SIZE.txt
+            sgdk/out/R3_BUILD_REPORT.md
+            sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+            sgdk/art/r3_manual_v2/R3_MANUAL_V2_AUDIT.json
+          if-no-files-found: error
