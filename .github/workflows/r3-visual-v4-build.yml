@@ -1,0 +1,120 @@
+name: R3 Visual V4 SGDK Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [r3-visual-v4-rom]
+    paths:
+      - 'sgdk/**'
+      - '.github/workflows/r3-visual-v4-build.yml'
+
+jobs:
+  build-r3-v4:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate accepted R2 ambient assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          python3 sgdk/tools/build_refined_animation_assets.py
+
+      - name: Generate and verify R3 Visual V4 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/build_r3_assets.py
+          python3 sgdk/tools/verify_r3_assets.py
+          python3 sgdk/tools/test_r3_world.py
+          mkdir -p sgdk/out
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import hashlib,json
+          root=Path('sgdk')
+          r2=Image.open(root/'res/r2_menu_bg.png'); r2.load()
+          assert hashlib.sha256(bytes(r2.getpalette())).hexdigest()=='b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          report=json.loads((root/'res/R3_ASSET_REPORT.json').read_text(encoding='utf-8'))
+          stress=json.loads((root/'out/R3_STREAM_STRESS.json').read_text(encoding='utf-8'))
+          assert report['tree_frames']==12 and report['water_frames']==8
+          assert report['total_r3_pattern_bytes'] <= 45056
+          assert stress['status']=='PASS'
+          print(json.dumps(report,indent=2))
+          print(json.dumps(stress,indent=2))
+          PY
+          sha256sum sgdk/res/r3_world_tiles.png sgdk/res/r3_hud_tiles.png | tee sgdk/out/R3_V4_RESOURCE_SHA256.txt
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_V4_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_V4_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r3v4-a /tmp/r3v4-b
+          cp -a sgdk /tmp/r3v4-a
+          cp -a sgdk /tmp/r3v4-b
+          rm -rf /tmp/r3v4-a/out /tmp/r3v4-b/out
+          mkdir -p /tmp/r3v4-a/out /tmp/r3v4-b/out
+          chmod -R a+rwX /tmp/r3v4-a /tmp/r3v4-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/r3v4-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/r3v4-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/r3v4-a/out/rom.bin
+          test -f /tmp/r3v4-b/out/rom.bin
+          cmp /tmp/r3v4-a/out/rom.bin /tmp/r3v4-b/out/rom.bin
+          cp /tmp/r3v4-a/out/rom.bin sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin
+          sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin | tee sgdk/out/R3_V4_SHA256.txt
+          stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin | tee sgdk/out/R3_V4_ROM_SIZE.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin | tee sgdk/out/R3_V4_ROM_AUDIT.json
+
+      - name: Candidate report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p sgdk/out
+          SHA=NOT_BUILT; SIZE=NOT_BUILT
+          if [ -f sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin ]; then SHA="$(sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin|awk '{print $1}')"; SIZE="$(stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_V4_CANDIDATE.bin)"; fi
+          cat > sgdk/out/R3_VISUAL_V4_BUILD_REPORT.md <<EOF
+          # Modern Tanks R3 Visual V4 Candidate
+          - Base: accepted R2 lineage, R3 renderer preserved
+          - World: 8192x8192 px, streamed 64x32 ring cache
+          - Visual: coherent metatiles, narrow river, rocky banks, detailed bridge, calmer grass/roads, structures/decor
+          - Ambient: 12-phase trees, 8-phase water
+          - HUD: fixed 96px right panel + 32px event log
+          - ROM size: ${SIZE}
+          - ROM SHA-256: ${SHA}
+          - Status: CANDIDATE pending owner emulator acceptance
+          EOF
+
+      - name: Publish R3 Visual V4 candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_VISUAL_V4_Candidate_With_Source
+          path: |
+            sgdk/**
+            .github/workflows/r3-visual-v4-build.yml
+          if-no-files-found: error
