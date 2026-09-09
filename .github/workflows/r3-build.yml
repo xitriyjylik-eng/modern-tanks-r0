@@ -1,0 +1,168 @@
+name: R3 Battle Renderer HUD SGDK Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r3-candidate
+    paths:
+      - 'r3/**'
+      - '.github/workflows/r3-build.yml'
+
+jobs:
+  build-r3:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify R3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          cat r3/R3_IMPLEMENTATION.patch.gz.b64.part* | tr -d '\r\n' | base64 -d | gzip -d > /tmp/R3_IMPLEMENTATION.patch
+          echo "Patch bytes: $(stat -c '%s' /tmp/R3_IMPLEMENTATION.patch)"
+          sha256sum /tmp/R3_IMPLEMENTATION.patch | tee sgdk/out/R3_PATCH_SHA256.txt
+          git apply --check /tmp/R3_IMPLEMENTATION.patch
+          git apply /tmp/R3_IMPLEMENTATION.patch
+          git diff --check
+          git status --short
+
+      - name: Generate and test R3 world assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          shopt -s nullglob
+          generators=(sgdk/tools/build_r3*.py)
+          if [ ${#generators[@]} -eq 0 ]; then
+            echo 'No R3 asset generator found' >&2
+            exit 1
+          fi
+          for f in "${generators[@]}"; do
+            echo "RUN $f"
+            python3 "$f"
+          done
+          tests=(sgdk/tools/test_r3*.py sgdk/tools/verify_r3*.py)
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo 'No R3 tests found' >&2
+            exit 1
+          fi
+          for f in "${tests[@]}"; do
+            echo "RUN $f"
+            python3 "$f"
+          done
+          find sgdk/res -maxdepth 1 -type f -name 'r3_*' -printf '%f %s bytes\n' | sort | tee sgdk/out/R3_GENERATED_RESOURCES.txt
+
+      - name: Verify R3 source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src='\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in Path('sgdk/src').rglob('*.[ch]'))
+          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8',errors='ignore')
+          required=(
+              '8192',
+              'R3',
+              'VDP_setHorizontalScroll',
+              'VDP_setVerticalScroll',
+          )
+          for token in required:
+              assert token in src or token in res, token
+          assert 'r3_world_tiles' in res, 'r3_world_tiles resource missing'
+          assert Path('sgdk/res/r3_world_tiles.png').exists()
+          print('R3 source contract PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+          cp -a sgdk /tmp/sgdk-r3-a
+          cp -a sgdk /tmp/sgdk-r3-b
+          rm -rf /tmp/sgdk-r3-a/out /tmp/sgdk-r3-b/out
+          mkdir -p /tmp/sgdk-r3-a/out /tmp/sgdk-r3-b/out
+          chmod -R a+rwX /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/sgdk-r3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/sgdk-r3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/sgdk-r3-a/out/rom.bin
+          test -f /tmp/sgdk-r3-b/out/rom.bin
+          cmp /tmp/sgdk-r3-a/out/rom.bin /tmp/sgdk-r3-b/out/rom.bin
+          cp /tmp/sgdk-r3-a/out/rom.bin sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R3_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R3_ROM_AUDIT.json
+          stat -c '%s' sgdk/out/rom.bin | tee sgdk/out/R3_ROM_SIZE.txt
+
+      - name: Build report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          ROM_SHA=NOT_BUILT
+          ROM_SIZE=NOT_BUILT
+          if [ -f sgdk/out/rom.bin ]; then
+            ROM_SHA="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
+            ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"
+          fi
+          cat > sgdk/out/R3_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R3 — Battle Renderer / HUD Candidate
+          - Commit: ${GITHUB_SHA}
+          - Base accepted R2: a1faa7d567ceb7f5506005b354da28f5c1ea0cee
+          - SGDK: 2.11 pinned
+          - ROM size: ${ROM_SIZE}
+          - ROM SHA-256: ${ROM_SHA}
+          - World stress target: 8192x8192 px
+          - World coordinates: 32-bit
+          - Renderer: streamed ring tilemap, independent Plane A / Plane B
+          - HUD: fixed battle window plus lower event log
+          - Ambient: phased trees and animated water
+          - R0-R2 accepted baseline: not modified by this workflow
+          - Gate: CANDIDATE until owner emulator acceptance
+          REPORT
+
+      - name: Publish R3 candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_Battle_Renderer_HUD_Candidate
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R3_SHA256.txt
+            sgdk/out/R3_ROM_SIZE.txt
+            sgdk/out/R3_ROM_AUDIT.json
+            sgdk/out/R3_BUILD_REPORT.md
+            sgdk/out/R3_PATCH_SHA256.txt
+            sgdk/out/R3_GENERATED_RESOURCES.txt
+            sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+          if-no-files-found: warn
