@@ -1,0 +1,127 @@
+    r=random.Random(2000+v); im=pimg(32,32,4+(v&1)); d=ImageDraw.Draw(im)
+    for n in range(5):
+        x=r.randrange(-4,28); y=r.randrange(-3,29); w=r.randrange(7,18); h=r.randrange(4,9)
+        irregular_blob(d,(x,y,x+w,y+h),r.choice([1,2,3,5,6,7]),20000+v*10+n,9)
+    # twin vehicle ruts, irregular and broken
+    for yy in (9+(v&1),22-(v&1)):
+        for x in range(32):
+            if ((x+v*3)//3)%4 != 2:
+                d.point((x,yy),fill=9 if x%5 else 10)
+                if x%7 in (1,2) and yy+1<32:d.point((x,yy+1),fill=7)
+    for _ in range(10):
+        x=r.randrange(2,30); y=r.randrange(2,30); c=r.choice([8,9,10,11,12])
+        d.point((x,y),fill=c)
+    split_put(world,ROAD_BASE+v*16,im,4,4,WORLD_COLS)
+
+# PAL1: coherent 16x16 animated water with long flow bands.
+for var in range(WATER_VARIANTS):
+    for frame in range(WATER_FRAMES):
+        im=pimg(16,16,6 if var!=1 else 4); d=ImageDraw.Draw(im)
+        # dark depth patches stay fixed per variant, highlights move
+        rr=random.Random(3000+var)
+        for n in range(3):
+            x=rr.randrange(-3,13); y=rr.randrange(-2,14); w=rr.randrange(5,10); h=rr.randrange(3,7)
+            irregular_blob(d,(x,y,x+w,y+h),rr.choice([5,7,9,10,11,13]),30000+var*10+n,8)
+        for band in range(4):
+            y=(2+band*4+(var&1))%16
+            start=(frame*2+band*5+var*3)%16; length=5+((band+var)&2)
+            for t in range(length):
+                x=(start+t)%16
+                d.point((x,y),fill=1 if 0<t<length-1 else 2)
+                if t in (2,3) and (band+frame)%2==0 and y+1<16:d.point((x,y+1),fill=3)
+        split_put(world,WATER_BASE+(var*WATER_FRAMES+frame)*4,im,2,2,WORLD_COLS)
+
+# PAL3: narrow rocky banks, 3 variations each side.
+for m in range(SHORE_META):
+    side=0 if m<3 else 1; var=m%3; r=random.Random(4000+m)
+    im=pimg(32,32,6); d=ImageDraw.Draw(im)
+    # layered earth/stone instead of full noisy brown slab
+    for n in range(4):
+        x=r.randrange(-5,29); y=r.randrange(-4,29); w=r.randrange(8,18); h=r.randrange(5,11)
+        irregular_blob(d,(x,y,x+w,y+h),r.choice([2,3,4,5,7,9]),40000+m*10+n,9)
+    edge=26 if side==0 else 5
+    for y in range(32):
+        x=edge+int(1.6*math.sin((y+var*7)/4.5))
+        for dx,c in [(-2,11),(-1,9),(0,1),(1,2)]:
+            xx=x+dx if side==0 else x-dx
+            if 0<=xx<32:d.point((xx,y),fill=c)
+    for _ in range(16):
+        x=r.randrange(32); y=r.randrange(32); d.point((x,y),fill=r.choice([1,8,10,11,12,13]))
+    split_put(world,SHORE_BASE+m*16,im,4,4,WORLD_COLS)
+
+# PAL3: detailed wooden bridges.
+for m in range(BRIDGE_META):
+    im=pimg(32,32,3); d=ImageDraw.Draw(im)
+    # shadow under rails
+    d.rectangle((0,0,31,3),fill=12); d.rectangle((0,28,31,31),fill=13)
+    # longitudinal planks with alternating tones
+    for y in range(4,28):
+        d.line((0,y,31,y),fill=2 if ((y//3+m)&1)==0 else 5)
+    for y in range(5,28,5):d.line((0,y,31,y),fill=9)
+    # beams and bolts
+    for x in range(2+(m&1),32,6):
+        d.line((x,4,x,27),fill=6)
+        d.point((x,7),fill=1); d.point((x,24),fill=1)
+    d.line((0,4,31,4),fill=1); d.line((0,27,31,27),fill=8)
+    split_put(world,BRIDGE_BASE+m*16,im,4,4,WORLD_COLS)
+
+# Decor 0..7 rocks (PAL0), 8..15 bushes (PAL2), 16..23 crates/stumps (PAL3).
+for m in range(DECOR_META):
+    im=pimg(16,16,0); d=ImageDraw.Draw(im); r=random.Random(6000+m)
+    if m<8:
+        cx=7+r.randrange(-1,2); cy=9; rx=4+r.randrange(0,2); ry=3+r.randrange(0,2)
+        d.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=3)
+        d.polygon([(cx-rx+1,cy),(cx-1,cy-ry),(cx+rx-1,cy-1),(cx+1,cy+ry)],fill=13)
+        d.line((cx-rx+2,cy-1,cx,cy-ry+1),fill=2)
+        d.point((cx+2,cy-2),fill=1)
+    elif m<16:
+        for k in range(4):
+            cx=r.randrange(4,12); cy=r.randrange(5,12); rr=r.randrange(2,4)
+            d.ellipse((cx-rr,cy-rr,cx+rr,cy+rr),fill=r.choice([3,4,6,7,8,10]))
+        for _ in range(8):
+            x=r.randrange(3,13); y=r.randrange(3,12)
+            if im.getpixel((x,y)):d.point((x,y),fill=r.choice([1,2,11,12]))
+    else:
+        if m&1:
+            # broken crate
+            d.rectangle((3,5,12,12),fill=4); d.rectangle((4,6,11,11),fill=2)
+            d.line((4,6,11,11),fill=9); d.line((11,6,4,11),fill=8)
+            d.line((3,5,12,5),fill=1); d.line((3,12,12,12),fill=11)
+        else:
+            # stump / log
+            d.ellipse((4,6,12,12),fill=5); d.ellipse((5,6,11,10),fill=1)
+            d.line((7,7,10,9),fill=8); d.rectangle((6,10,10,14),fill=9)
+    split_put(world,DECOR_BASE+m*4,im,2,2,WORLD_COLS)
+
+# PAL3: eight readable small buildings, using roof/wall/shadow layers.
+for m in range(STRUCT_VARIANTS):
+    im=pimg(32,24,0); d=ImageDraw.Draw(im); r=random.Random(7000+m)
+    d.ellipse((2,17,30,23),fill=13)
+    roof=[8,9,11,12][m%4]
+    d.polygon([(2,9),(9,2),(23,2),(30,9)],fill=roof)
+    d.line((3,8,29,8),fill=15); d.line((7,4,25,4),fill=6)
+    wall=[1,2,3,5][(m//2)%4]; d.rectangle((5,9,27,21),fill=wall)
+    for y in range(11,21,4):d.line((6,y,26,y),fill=6 if y&1 else 9)
+    # door and window
+    dx=7+(m%3)*6; d.rectangle((dx,14,dx+5,21),fill=11); d.line((dx,14,dx+5,14),fill=8)
+    wx=20 if dx<15 else 8; d.rectangle((wx,12,wx+5,16),fill=9); d.rectangle((wx+1,13,wx+4,15),fill=1)
+    d.point((dx+4,18),fill=1)
+    # roof wear
+    for _ in range(10):
+        x=r.randrange(6,27); y=r.randrange(3,9); d.point((x,y),fill=r.choice([6,8,9,10,13,15]))
+    split_put(world,STRUCT_BASE+m*12,im,4,3,WORLD_COLS)
+
+# PAL2: two distinct tree silhouettes, each 12 subtle frames.
+def tree_frame(variant,frame):
+    im=pimg(32,24,0); d=ImageDraw.Draw(im)
+    sway=1 if frame in (2,3,4) else -1 if frame in (8,9,10) else 0
+    if variant==0:
+        # broad deciduous tree similar in scale to accepted menu vegetation
+        d.rectangle((14,13,17,23),fill=9); d.rectangle((15,14,16,23),fill=5)
+        centers=[(8,10,6),(15,7,8),(23,10,6),(11,14,7),(20,14,7)]
+        tones=[7,4,6,8,5]
+        for idx,(cx,cy,rr) in enumerate(centers):
+            sx=sway if idx in (0,2,4) else 0
+            d.ellipse((cx-rr+sx,cy-rr,cx+rr+sx,cy+rr),fill=tones[idx])
+            d.ellipse((cx-rr//2+sx,cy-rr//2,cx+rr//2+sx,cy+rr//2),fill=max(1,tones[idx]-3))
+    else:
