@@ -33,16 +33,38 @@ static s32 cameraTargetYQ8 = 320L << R3_CAM_FP_SHIFT;
 static s16 loadedBaseTileX = 0;
 static s16 loadedBaseTileY = 0;
 
-static const u8 * const r3TileChunks[8] =
+static const u8 * const r3TileChunks[30] =
 {
-    r3_target_world_tiles_0,
-    r3_target_world_tiles_1,
-    r3_target_world_tiles_2,
-    r3_target_world_tiles_3,
-    r3_target_world_tiles_4,
-    r3_target_world_tiles_5,
-    r3_target_world_tiles_6,
-    r3_target_world_tiles_7
+    r3_target_world_tiles_00,
+    r3_target_world_tiles_01,
+    r3_target_world_tiles_02,
+    r3_target_world_tiles_03,
+    r3_target_world_tiles_04,
+    r3_target_world_tiles_05,
+    r3_target_world_tiles_06,
+    r3_target_world_tiles_07,
+    r3_target_world_tiles_08,
+    r3_target_world_tiles_09,
+    r3_target_world_tiles_10,
+    r3_target_world_tiles_11,
+    r3_target_world_tiles_12,
+    r3_target_world_tiles_13,
+    r3_target_world_tiles_14,
+    r3_target_world_tiles_15,
+    r3_target_world_tiles_16,
+    r3_target_world_tiles_17,
+    r3_target_world_tiles_18,
+    r3_target_world_tiles_19,
+    r3_target_world_tiles_20,
+    r3_target_world_tiles_21,
+    r3_target_world_tiles_22,
+    r3_target_world_tiles_23,
+    r3_target_world_tiles_24,
+    r3_target_world_tiles_25,
+    r3_target_world_tiles_26,
+    r3_target_world_tiles_27,
+    r3_target_world_tiles_28,
+    r3_target_world_tiles_29
 };
 
 static s32 clampQ8(s32 value, s32 loPx, s32 hiPx)
@@ -88,8 +110,8 @@ static void loadWorldTile(s16 worldX, s16 worldY, TransferMethod tm)
     const u16 wx = clampWorldTileX(worldX);
     const u16 wy = clampWorldTileY(worldY);
     const u32 worldIndex = ((u32) wy * R3_WORLD_W_TILES) + wx;
-    const u16 chunk = wy / 15;
-    const u16 localRow = wy % 15;
+    const u16 chunk = wy / 4;
+    const u16 localRow = wy % 4;
     const u32 localIndex = ((u32) localRow * R3_WORLD_W_TILES) + wx;
 
     const u16 slotX = ((u16) worldX) & (R3_RING_W - 1);
@@ -163,7 +185,6 @@ static void updateStreaming(s16 tileX, s16 tileY)
 
 static void drawHud(void)
 {
-    /* Opaque dark panel tile and a generic solid tile for bars. */
     VDP_fillTileData(0x77, R3_HUD_BG_TILE, 1, TRUE);
     VDP_fillTileData(0x11, R3_HUD_SOLID_TILE, 1, TRUE);
 
@@ -188,7 +209,6 @@ static void drawHud(void)
     VDP_drawText("SCORE", 29, 14);
     VDP_drawText("002480", 29, 16);
 
-    /* Simple segmented bars; final HUD art will replace these text-era blocks. */
     VDP_fillTileMapRect(BG_A,
         TILE_ATTR_FULL(PAL2, TRUE, FALSE, FALSE, R3_HUD_SOLID_TILE),
         32, 4, 6, 1);
@@ -214,7 +234,6 @@ void R3_worldEnter(void)
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
 
-    /* Exact four palette banks from the accepted R2 artwork. */
     PAL_setColors(0, r2_menu_bg.palette->data, 64, CPU);
 
     loadInitialRing(tileX, tileY);
@@ -232,8 +251,6 @@ void R3_worldLeave(void)
     VDP_setVerticalScroll(BG_A, 0);
     VDP_setHorizontalScroll(BG_B, 0);
     VDP_setVerticalScroll(BG_B, 0);
-
-    /* R2 menu needs 40 visible tile columns. */
     VDP_setPlaneSize(64, 32, TRUE);
 }
 
