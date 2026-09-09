@@ -1,5 +1,6 @@
 #include <genesis.h>
 #include "resources.h"
+#include "battle_r3.h"
 
 /*
  * Modern Tanks R2 — refined ambient pass.
@@ -476,7 +477,7 @@ static void draw_state(GameState state)
     if (state == STATE_BOOT) draw_boot();
     else if (state == STATE_TITLE) draw_title();
     else if (state == STATE_MAIN_MENU) draw_menu_art();
-    else if (state == STATE_TEST_BATTLE) draw_shell("TEST BATTLE SHELL", "BATTLE");
+    else if (state == STATE_TEST_BATTLE) R3_battleEnter();
     else if (state == STATE_GARAGE) draw_shell("GARAGE SHELL", "GARAGE");
     else set_error("DRAW_INVALID_STATE");
 }
@@ -492,7 +493,7 @@ static void state_enter(GameState state)
 
 static void state_leave(GameState state)
 {
-    (void) state;
+    if (state == STATE_TEST_BATTLE) R3_battleLeave();
     resource_bank_unload();
 }
 
@@ -562,6 +563,10 @@ static void handle_input_frame(void)
             break;
 
         case STATE_TEST_BATTLE:
+            if (input.pressed & BUTTON_B) change_state(STATE_MAIN_MENU);
+            else R3_battleSetInput(input.held, input.pressed);
+            break;
+
         case STATE_GARAGE:
             if (input.pressed & BUTTON_B) change_state(STATE_MAIN_MENU);
             break;
@@ -580,6 +585,7 @@ static void update_logic_tick(void)
         return;
     }
     if (currentState == STATE_MAIN_MENU) update_menu_visuals();
+    else if (currentState == STATE_TEST_BATTLE) R3_battleUpdate();
 }
 
 int main(bool hardReset)
