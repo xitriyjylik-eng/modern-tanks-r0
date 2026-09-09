@@ -53,3 +53,14 @@ IMAGE r2_trees_8 "r2_trees_8.png" FAST ALL
 IMAGE r2_trees_9 "r2_trees_9.png" FAST ALL
 IMAGE r2_trees_10 "r2_trees_10.png" FAST ALL
 IMAGE r2_trees_11 "r2_trees_11.png" FAST ALL
+
+# R3 high-detail streamed world: raw 4bpp tile patterns + per-tile palette bank, no compression
+BIN r3_target_world_banks "r3_target_world_banks.bin" 2 2 0 NONE FALSE
+BIN r3_target_world_tiles_0 "r3_target_world_tiles_0.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_1 "r3_target_world_tiles_1.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_2 "r3_target_world_tiles_2.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_3 "r3_target_world_tiles_3.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_4 "r3_target_world_tiles_4.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_5 "r3_target_world_tiles_5.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_6 "r3_target_world_tiles_6.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_7 "r3_target_world_tiles_7.bin" 4 4 0 NONE FALSE
