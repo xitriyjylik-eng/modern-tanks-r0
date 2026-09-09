@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+from pathlib import Path
+from PIL import Image
+import json
+
+root = Path(__file__).resolve().parents[1]
+res = root / 'res'
+
+r2 = Image.open(res / 'r2_menu_bg.png')
+r2.load()
+world = Image.open(res / 'r3_world_tiles.png')
+world.load()
+hud = Image.open(res / 'r3_hud_tiles.png')
+hud.load()
+
+assert world.mode == 'P' and world.size == (320, 256), ('r3_world_tiles.png', world.mode, world.size)
+assert hud.mode == 'P' and hud.size == (128, 64), ('r3_hud_tiles.png', hud.mode, hud.size)
+assert max(world.getdata()) <= 15, ('world max palette index', max(world.getdata()))
+assert max(hud.getdata()) <= 15, ('hud max palette index', max(hud.getdata()))
+assert world.getpalette() == r2.getpalette(), 'R3 world palette metadata must exactly match accepted R2 palette'
+assert hud.getpalette() == r2.getpalette(), 'R3 HUD palette metadata must exactly match accepted R2 palette'
+
+def unique_tiles(im):
+    return len({
+        bytes(im.crop((x, y, x + 8, y + 8)).getdata())
+        for y in range(0, im.height, 8)
+        for x in range(0, im.width, 8)
+    })
+
+world_unique = unique_tiles(world)
+hud_unique = unique_tiles(hud)
+assert world_unique >= 800, (world_unique, 'world richness regression')
+assert hud_unique >= 45, (hud_unique, 'HUD richness regression')
+
+report = json.loads((res / 'R3_ASSET_REPORT.json').read_text(encoding='utf-8'))
+assert report['world_tiles'] == 1280, report
+assert report['hud_tiles'] == 128, report
+assert report['total_r3_pattern_bytes'] == 45056, report
+assert report['tree_variants'] == 2 and report['tree_frames'] == 12 and report['water_frames'] == 8, report
+assert report['source_r2_palette_sha256'] == 'b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37', report
+
+print('R3 VISUAL V4 asset verification PASS')
+print(json.dumps({
+    'world_unique': world_unique,
+    'hud_unique': hud_unique,
+    'pattern_bytes': report['total_r3_pattern_bytes'],
+    'tree_variants': report['tree_variants'],
+    'tree_frames': report['tree_frames'],
+    'water_frames': report['water_frames'],
+}, indent=2))
