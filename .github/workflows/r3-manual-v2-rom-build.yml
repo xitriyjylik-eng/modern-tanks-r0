@@ -5,6 +5,7 @@ on:
     paths:
       - 'r3_payload3.part_*'
       - 'r3_build_payload.part_*'
+      - 'r3_overrides/**'
       - '.github/workflows/r3-manual-v2-rom-build.yml'
   workflow_dispatch:
 
@@ -36,10 +37,12 @@ jobs:
             | base64 -d > /tmp/r3_payload.tar.gz
           printf '%s  %s\n' '67340931c59314692e607f066b2ade631f386e36e50295b1c5bc83d23b828fff' '/tmp/r3_payload.tar.gz' | sha256sum -c -
           tar -xzf /tmp/r3_payload.tar.gz -C .
+          cp r3_overrides/resources.res sgdk/res/resources.res
           test -f sgdk/res/r2_menu_bg.png
           test -f sgdk/res/r3_manual_ground.png
           test -f sgdk/src/battle/battle_r3_manual.c
-          echo "payload restored"
+          test "$(wc -c < sgdk/res/resources.res)" -gt 3000
+          echo "payload restored and ASCII-safe resource manifest applied"
 
       - name: Verify manual authored world contract
         shell: bash
@@ -56,7 +59,9 @@ jobs:
           assert 'map_create' in s and 'map_scrollto' in s and 'smoothcameraaxis' in s
           bg=Path('sgdk/res/r2_menu_bg.png').read_bytes()
           assert hashlib.sha256(bg).hexdigest()=='2f1e69a776957bae113d1eb24df9564c99855459f8d661a656291775730917ff'
-          print('manual runtime contract PASS; accepted R2 menu exact hash PASS')
+          manifest=Path('sgdk/res/resources.res').read_bytes()
+          assert all(b < 128 for b in manifest), 'resources.res must remain ASCII for ResComp compatibility'
+          print('manual runtime contract PASS; accepted R2 menu exact hash PASS; resource manifest ASCII PASS')
           PY
 
       - name: Pin SGDK 2.11
