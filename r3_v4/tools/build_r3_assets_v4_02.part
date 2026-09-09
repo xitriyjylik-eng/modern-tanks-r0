@@ -1,0 +1,105 @@
+        # compact conifer cluster, pointier and darker
+        d.rectangle((15,14,17,23),fill=9)
+        for k,(cy,w,c) in enumerate([(5,5,3),(9,8,4),(13,10,6),(17,8,8)]):
+            sx=sway if k in (1,2) else 0
+            d.polygon([(16+sx-w,cy+6),(16+sx,cy-3),(16+sx+w,cy+6)],fill=c)
+            if k<3:d.line((16+sx,cy-2,16+sx,cy+4),fill=max(1,c-2))
+    # crown edge sparkle/shadow changes only: trunk is static
+    r=random.Random(8000+variant*100+frame)
+    for _ in range(20):
+        x=r.randrange(4,28); y=r.randrange(2,19)
+        if im.getpixel((x,y)):
+            if r.random()<.55:d.point((x,y),fill=r.choice([1,2,3,7,10,11]))
+    return im
+for variant in range(TREE_VARIANTS):
+    for f in range(TREE_FRAMES):
+        base=TREE_BASE+(variant*TREE_FRAMES+f)*12
+        split_put(world,base,tree_frame(variant,f),4,3,WORLD_COLS)
+
+# Extra single-tile scenery: fence, crater, tracks, flowers, debris.
+for i in range(EXTRA_COUNT):
+    a=[[0]*8 for _ in range(8)]; typ=i%8; r=random.Random(9000+i)
+    if typ==0: # horizontal fence PAL3
+        for x in range(8):a[3][x]=5; a[4][x]=9
+        for x in (1,6):
+            for y in range(1,7):a[y][x]=3 if y<4 else 11
+    elif typ==1: # vertical fence PAL3
+        for y in range(8):a[y][3]=5; a[y][4]=9
+        for y in (1,6):
+            for x in range(1,7):a[y][x]=3 if x<4 else 11
+    elif typ==2: # crater PAL3
+        for y in range(2,7):
+            for x in range(1,7):
+                dx=(x-3.5)/3; dy=(y-4)/2.5
+                if dx*dx+dy*dy<1:a[y][x]=13 if dx*dx+dy*dy<.45 else 9
+        a[2][3]=6; a[3][2]=5
+    elif typ==3: # track mark PAL3
+        for y in (2,5):
+            for x in range(8):
+                if (x+i)%3:a[y][x]=10
+    elif typ==4: # grass tuft PAL2
+        for x,y in [(3,6),(4,6),(3,5),(4,4),(2,4),(5,3)]:a[y][x]=1 if y<5 else 6
+    elif typ==5: # dark bush PAL2
+        for y in range(2,7):
+            for x in range(1,7):
+                if (x-4)**2+(y-4)**2<10:a[y][x]=r.choice([5,6,7,8,10])
+        a[2][3]=2; a[3][5]=3
+    elif typ==6: # debris PAL0
+        a[2][2]=3;a[3][3]=13;a[4][4]=2;a[5][5]=8;a[5][2]=9;a[1][6]=14
+    else: # stones PAL0
+        for x,y in [(2,5),(3,4),(4,5),(5,3),(6,4)]:a[y][x]=r.choice([2,3,13])
+    put_tile(world,EXTRA_BASE+i,a,WORLD_COLS)
+
+# HUD: military dark steel with restrained gold highlights, same PAL0 as R2 menu.
+hud=pimg(HUD_COLS*8,HUD_ROWS*8,0)
+def hudtile(tid,a):put_tile(hud,tid,a,HUD_COLS)
+a=[[7]*8 for _ in range(8)]
+for y in range(8):
+    for x in range(8):
+        if (x+y*3)%17==0:a[y][x]=6
+hudtile(HT_BG,a)
+a=[[6 if 1<=x<=6 and 1<=y<=6 else 7 for x in range(8)] for y in range(8)]
+for y in range(2,6):
+    for x in range(2,6):a[y][x]=15
+hudtile(HT_SOLID,a)
+a=[[7]*8 for _ in range(8)]
+for x in range(8):a[1][x]=3;a[2][x]=2;a[3][x]=6;a[6][x]=5
+hudtile(HT_HLINE,a)
+a=[[7]*8 for _ in range(8)]
+for y in range(8):a[y][1]=3;a[y][2]=2;a[y][3]=6;a[y][6]=5
+hudtile(HT_VLINE,a)
+a=[[7]*8 for _ in range(8)]
+for x in range(8):a[1][x]=3;a[2][x]=2
+for y in range(8):a[y][1]=3;a[y][2]=2
+hudtile(HT_CORNER,a)
+a=[[7]*8 for _ in range(8)]
+for i in range(8):a[i][i]=3;a[i][7-i]=5
+hudtile(HT_DIAG,a)
+a=[[7]*8 for _ in range(8)]
+for y in (3,4):
+    for x in (3,4):a[y][x]=15
+hudtile(HT_DOT,a)
+a=[[7]*8 for _ in range(8)];a[2][2]=3;a[2][5]=3;a[5][2]=3;a[5][5]=3;hudtile(HT_RIVET,a)
+for ci,ch in enumerate(CHARSET):
+    a=[[7]*8 for _ in range(8)]
+    for y,row in enumerate(FONT.get(ch,FONT[' '])):
+        for x,v in enumerate(row):
+            if v=='1':a[y][x+1]=15 if ch not in '0123456789' else 14
+    hudtile(HT_GLYPH_BASE+ci,a)
+
+world_path=RES/'r3_world_tiles.png'; hud_path=RES/'r3_hud_tiles.png'
+world.save(world_path,optimize=True); hud.save(hud_path,optimize=True)
+report={
+    'version':'R3_VISUAL_V4',
+    'world_tiles':WORLD_COUNT,'hud_tiles':HUD_COUNT,
+    'world_unique_tiles':unique_tiles(world),'hud_unique_tiles':unique_tiles(hud),
+    'world_pattern_bytes':WORLD_COUNT*32,'hud_pattern_bytes':HUD_COUNT*32,
+    'total_r3_pattern_bytes':(WORLD_COUNT+HUD_COUNT)*32,
+    'tree_variants':TREE_VARIANTS,'tree_frames':TREE_FRAMES,'water_frames':WATER_FRAMES,
+    'world_sha256':hashlib.sha256(world_path.read_bytes()).hexdigest(),
+    'hud_sha256':hashlib.sha256(hud_path.read_bytes()).hexdigest(),
+    'source_r2_palette_sha256':hashlib.sha256(bytes(SRC_PAL)).hexdigest(),
+    'notes':'V4: coherent R2-style metatiles, two tree silhouettes, narrow river target, detailed bridge/buildings/decor, military HUD.'
+}
+(RES/'R3_ASSET_REPORT.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+print(json.dumps(report,indent=2))
