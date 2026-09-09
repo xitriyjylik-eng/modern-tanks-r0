@@ -1,20 +1,49 @@
 #!/usr/bin/env python3
 from pathlib import Path
 from PIL import Image
-import hashlib,json
-root=Path(__file__).resolve().parents[1]
-res=root/'res'
-for name,size,count in [('r3_world_tiles.png',(128,64),128),('r3_hud_tiles.png',(64,64),64)]:
-    im=Image.open(res/name); im.load()
-    assert im.mode=='P' and im.size==size,(name,im.mode,im.size)
-    assert max(im.getdata())<=15,(name,max(im.getdata()))
-    assert (im.width//8)*(im.height//8)==count
-r2=Image.open(res/'r2_menu_bg.png'); r2.load()
-w=Image.open(res/'r3_world_tiles.png'); w.load()
-h=Image.open(res/'r3_hud_tiles.png'); h.load()
-assert w.getpalette()==r2.getpalette(), 'R3 world palette metadata must exactly match accepted R2 palette'
-assert h.getpalette()==r2.getpalette(), 'R3 HUD palette metadata must exactly match accepted R2 palette'
-report=json.loads((res/'R3_ASSET_REPORT.json').read_text())
-assert report['tree_frames']==12 and report['water_frames']==8
-print('R3 asset verification PASS')
-print(json.dumps(report,indent=2))
+import json
+
+root = Path(__file__).resolve().parents[1]
+res = root / 'res'
+
+r2 = Image.open(res / 'r2_menu_bg.png')
+r2.load()
+world = Image.open(res / 'r3_world_tiles.png')
+world.load()
+hud = Image.open(res / 'r3_hud_tiles.png')
+hud.load()
+
+assert world.mode == 'P' and world.size == (256, 256), ('r3_world_tiles.png', world.mode, world.size)
+assert hud.mode == 'P' and hud.size == (128, 64), ('r3_hud_tiles.png', hud.mode, hud.size)
+assert max(world.getdata()) <= 15, ('world max palette index', max(world.getdata()))
+assert max(hud.getdata()) <= 15, ('hud max palette index', max(hud.getdata()))
+assert world.getpalette() == r2.getpalette(), 'R3 world palette metadata must exactly match accepted R2 palette'
+assert hud.getpalette() == r2.getpalette(), 'R3 HUD palette metadata must exactly match accepted R2 palette'
+
+def unique_tiles(im):
+    return len({
+        bytes(im.crop((x, y, x + 8, y + 8)).getdata())
+        for y in range(0, im.height, 8)
+        for x in range(0, im.width, 8)
+    })
+
+world_unique = unique_tiles(world)
+hud_unique = unique_tiles(hud)
+assert world_unique >= 850, (world_unique, 'world richness regression')
+assert hud_unique >= 100, (hud_unique, 'HUD richness regression')
+
+report = json.loads((res / 'R3_ASSET_REPORT.json').read_text(encoding='utf-8'))
+assert report['world_tiles'] == 1024, report
+assert report['hud_tiles'] == 128, report
+assert report['total_r3_pattern_bytes'] == 36864, report
+assert report['tree_frames'] == 12 and report['water_frames'] == 8, report
+assert report['source_r2_palette_sha256'] == 'b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37', report
+
+print('R3 V2 asset verification PASS')
+print(json.dumps({
+    'world_unique': world_unique,
+    'hud_unique': hud_unique,
+    'pattern_bytes': report['total_r3_pattern_bytes'],
+    'tree_frames': report['tree_frames'],
+    'water_frames': report['water_frames'],
+}, indent=2))
