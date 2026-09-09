@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+from pathlib import Path
+from PIL import Image, ImageDraw
+import hashlib, json, math, random
+
+ROOT=Path(__file__).resolve().parents[1]
+RES=ROOT/'res'
+SOURCE=Image.open(RES/'r2_menu_bg.png'); SOURCE.load(); SRC_PAL=SOURCE.getpalette()
+T=8
+WORLD_COLS=40; WORLD_ROWS=32; WORLD_COUNT=WORLD_COLS*WORLD_ROWS
+HUD_COLS=16; HUD_ROWS=8; HUD_COUNT=HUD_COLS*HUD_ROWS
+
+BLANK=0
+GRASS_BASE=1; GRASS_META=12; GRASS_COUNT=192
+ROAD_BASE=193; ROAD_META=8; ROAD_COUNT=128
+WATER_BASE=321; WATER_VARIANTS=3; WATER_FRAMES=8; WATER_COUNT=96
+SHORE_BASE=417; SHORE_META=6; SHORE_COUNT=96
+BRIDGE_BASE=513; BRIDGE_META=4; BRIDGE_COUNT=64
+DECOR_BASE=577; DECOR_META=24; DECOR_COUNT=96
+STRUCT_BASE=673; STRUCT_VARIANTS=8; STRUCT_COUNT=96
+TREE_BASE=769; TREE_VARIANTS=2; TREE_FRAMES=12; TREE_W=4; TREE_H=3; TREE_COUNT=TREE_VARIANTS*TREE_FRAMES*TREE_W*TREE_H
+EXTRA_BASE=TREE_BASE+TREE_COUNT
+EXTRA_COUNT=WORLD_COUNT-EXTRA_BASE
+assert EXTRA_COUNT>64
+
+CHARSET='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ:-/ .'
+HT_BG=0; HT_SOLID=1; HT_HLINE=2; HT_VLINE=3; HT_CORNER=4; HT_DIAG=5; HT_DOT=6; HT_RIVET=7
+HT_GLYPH_BASE=8
+assert HT_GLYPH_BASE+len(CHARSET)<=HUD_COUNT
+
+FONT={
+'0':['01110','10001','10011','10101','11001','10001','01110'],'1':['00100','01100','00100','00100','00100','00100','01110'],
+'2':['01110','10001','00001','00010','00100','01000','11111'],'3':['11110','00001','00001','01110','00001','00001','11110'],
+'4':['00010','00110','01010','10010','11111','00010','00010'],'5':['11111','10000','10000','11110','00001','00001','11110'],
+'6':['01110','10000','10000','11110','10001','10001','01110'],'7':['11111','00001','00010','00100','01000','01000','01000'],
+'8':['01110','10001','10001','01110','10001','10001','01110'],'9':['01110','10001','10001','01111','00001','00001','01110'],
+'A':['01110','10001','10001','11111','10001','10001','10001'],'B':['11110','10001','10001','11110','10001','10001','11110'],
+'C':['01111','10000','10000','10000','10000','10000','01111'],'D':['11110','10001','10001','10001','10001','10001','11110'],
+'E':['11111','10000','10000','11110','10000','10000','11111'],'F':['11111','10000','10000','11110','10000','10000','10000'],
+'G':['01111','10000','10000','10111','10001','10001','01111'],'H':['10001','10001','10001','11111','10001','10001','10001'],
+'I':['11111','00100','00100','00100','00100','00100','11111'],'J':['00111','00010','00010','00010','10010','10010','01100'],
+'K':['10001','10010','10100','11000','10100','10010','10001'],'L':['10000','10000','10000','10000','10000','10000','11111'],
+'M':['10001','11011','10101','10101','10001','10001','10001'],'N':['10001','11001','10101','10011','10001','10001','10001'],
+'O':['01110','10001','10001','10001','10001','10001','01110'],'P':['11110','10001','10001','11110','10000','10000','10000'],
+'Q':['01110','10001','10001','10001','10101','10010','01101'],'R':['11110','10001','10001','11110','10100','10010','10001'],
+'S':['01111','10000','10000','01110','00001','00001','11110'],'T':['11111','00100','00100','00100','00100','00100','00100'],
+'U':['10001','10001','10001','10001','10001','10001','01110'],'V':['10001','10001','10001','10001','10001','01010','00100'],
+'W':['10001','11011','10101','10101','10101','10101','01010'],'X':['10001','10001','01010','00100','01010','10001','10001'],
+'Y':['10001','10001','01010','00100','00100','00100','00100'],'Z':['11111','00001','00010','00100','01000','10000','11111'],
+':':['00000','00100','00100','00000','00100','00100','00000'],'-':['00000','00000','00000','11111','00000','00000','00000'],
+'/':['00001','00010','00010','00100','01000','01000','10000'],'.':['00000','00000','00000','00000','00000','00100','00100'],
+' ':['00000']*7,
+}
+
+def palette_flat():
+    p=SRC_PAL[:192]
+    return p+[0]*(768-len(p))
+def pimg(w,h,fill=0):
+    im=Image.new('P',(w,h),fill); im.putpalette(palette_flat()); return im
+def put_tile(atlas,tid,pix,cols):
+    x=(tid%cols)*8; y=(tid//cols)*8
+    for yy in range(8):
+        for xx in range(8): atlas.putpixel((x+xx,y+yy),int(pix[yy][xx] if isinstance(pix[0],list) else pix[yy*8+xx])&15)
+def split_put(atlas,base,im,cols,rows,atlas_cols):
+    p=im.load()
+    for ty in range(rows):
+        for tx in range(cols):
+            tile=[[p[tx*8+x,ty*8+y] for x in range(8)] for y in range(8)]
+            put_tile(atlas,base+ty*cols+tx,tile,atlas_cols)
+def unique_tiles(im):
+    return len({bytes(im.crop((x,y,x+8,y+8)).getdata()) for y in range(0,im.height,8) for x in range(0,im.width,8)})
+
+def irregular_blob(d, box, fill, seed, points=12):
+    x0,y0,x1,y1=box; r=random.Random(seed)
+    cx=(x0+x1)/2; cy=(y0+y1)/2; rx=(x1-x0)/2; ry=(y1-y0)/2
+    pts=[]
+    for i in range(points):
+        a=2*math.pi*i/points
+        wob=.78+r.random()*.30
+        pts.append((int(cx+math.cos(a)*rx*wob),int(cy+math.sin(a)*ry*wob)))
+    d.polygon(pts,fill=fill)
+
+world=pimg(WORLD_COLS*8,WORLD_ROWS*8,0)
+put_tile(world,BLANK,[[0]*8 for _ in range(8)],WORLD_COLS)
+
+# PAL2: grass / forest floor. Broad readable patches, sparse micro-detail.
+for v in range(GRASS_META):
+    r=random.Random(1000+v); base=[4,4,5,5,6,3][v%6]
+    im=pimg(32,32,base); d=ImageDraw.Draw(im)
+    # larger organic shade patches
+    for n in range(4):
+        x=r.randrange(-4,28); y=r.randrange(-4,28); w=r.randrange(9,20); h=r.randrange(6,14)
+        c=r.choice([2,3,5,6,7,8])
+        irregular_blob(d,(x,y,x+w,y+h),c,10000+v*10+n,10)
+    # small brighter tufts and dark leaf litter
+    for _ in range(15):
+        x=r.randrange(2,30); y=r.randrange(3,30); c=r.choice([1,2,7,8,9,10])
+        d.point((x,y),fill=c)
+        if r.random()<.6:d.point((x,y-1),fill=c)
+        if r.random()<.25:d.point((x+1,y),fill=c)
+    for _ in range(6):
+        x=r.randrange(3,29); y=r.randrange(3,29); c=r.choice([9,10,11,12])
+        d.rectangle((x,y,x+1,y),fill=c)
+    # a few readable grass blades rather than pixel noise
+    for _ in range(5):
+        x=r.randrange(4,28); y=r.randrange(6,29); c=r.choice([1,2,3])
+        d.line((x,y,x-1,y-2),fill=c); d.line((x,y,x+1,y-2),fill=c)
+    split_put(world,GRASS_BASE+v*16,im,4,4,WORLD_COLS)
+
+# PAL3: dirt road. More uniform material with ruts and stones.
+for v in range(ROAD_META):
