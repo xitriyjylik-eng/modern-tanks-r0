@@ -86,3 +86,13 @@ BIN r3_target_world_tiles_26 "r3_target_world_tiles_26.bin" 4 4 0 NONE FALSE
 BIN r3_target_world_tiles_27 "r3_target_world_tiles_27.bin" 4 4 0 NONE FALSE
 BIN r3_target_world_tiles_28 "r3_target_world_tiles_28.bin" 4 4 0 NONE FALSE
 BIN r3_target_world_tiles_29 "r3_target_world_tiles_29.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_30 "r3_target_world_tiles_30.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_31 "r3_target_world_tiles_31.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_32 "r3_target_world_tiles_32.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_33 "r3_target_world_tiles_33.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_34 "r3_target_world_tiles_34.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_35 "r3_target_world_tiles_35.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_36 "r3_target_world_tiles_36.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_37 "r3_target_world_tiles_37.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_38 "r3_target_world_tiles_38.bin" 4 4 0 NONE FALSE
+BIN r3_target_world_tiles_39 "r3_target_world_tiles_39.bin" 4 4 0 NONE FALSE
