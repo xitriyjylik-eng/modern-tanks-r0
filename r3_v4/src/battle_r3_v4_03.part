@@ -1,0 +1,143 @@
+    {
+        /* Fail visibly but safely; current R3 assets are far below this limit. */
+        PAL_setColor(0, RGB24_TO_VDPCOLOR(0x400000));
+        return;
+    }
+
+    VDP_loadTileSet(&r3_world_tiles, worldTileBase, CPU);
+    VDP_loadTileSet(&r3_hud_tiles, hudTileBase, CPU);
+
+    cameraCenterX = R3_WORLD_WIDTH_PX / 2;
+    cameraCenterY = R3_WORLD_HEIGHT_PX / 2;
+    cameraPosXQ8 = cameraCenterX << R3_CAMERA_FP_SHIFT;
+    cameraPosYQ8 = cameraCenterY << R3_CAMERA_FP_SHIFT;
+    cameraTargetXQ8 = cameraPosXQ8;
+    cameraTargetYQ8 = cameraPosYQ8;
+    loadedOriginX = (s16)(cameraLeft() >> 3) - R3_PREFETCH_LEFT;
+    loadedOriginY = (s16)(cameraTop() >> 3) - R3_PREFETCH_TOP;
+    treeFrame = waterFrame = treeTick = waterTick = minimapTick = 0;
+    padHeld = 0;
+    fillRing();
+    applyScroll();
+    drawHudFrame();
+    updateHudNumbers();
+    lastCameraTileX = (s16)(cameraLeft() >> 3);
+    lastCameraTileY = (s16)(cameraTop() >> 3);
+    active = TRUE;
+}
+
+void R3_battleLeave(void)
+{
+    if (!active) return;
+    VDP_setWindowOff();
+    VDP_setHorizontalScroll(BG_A, 0);
+    VDP_setHorizontalScroll(BG_B, 0);
+    VDP_setVerticalScroll(BG_A, 0);
+    VDP_setVerticalScroll(BG_B, 0);
+    padHeld = 0;
+    active = FALSE;
+}
+
+void R3_battleSetInput(u16 held, u16 pressed)
+{
+    (void)pressed;
+    padHeld = held;
+}
+
+static s32 smoothCameraAxis(s32 posQ8, s32 targetQ8)
+{
+    s32 delta = targetQ8 - posQ8;
+    s32 step;
+    if (delta > -8 && delta < 8) return targetQ8;
+    step = delta >> R3_CAMERA_RESPONSE_SHIFT;
+    if (step > R3_CAMERA_MAX_STEP_Q8) step = R3_CAMERA_MAX_STEP_Q8;
+    if (step < -R3_CAMERA_MAX_STEP_Q8) step = -R3_CAMERA_MAX_STEP_Q8;
+    if (step == 0) step = (delta > 0) ? 1 : -1;
+    return posQ8 + step;
+}
+
+void R3_battleSetCameraTarget(s32 worldX, s32 worldY)
+{
+    s32 minX = R3_BATTLEFIELD_WIDTH_PX / 2;
+    s32 maxX = R3_WORLD_WIDTH_PX - (R3_BATTLEFIELD_WIDTH_PX / 2);
+    s32 minY = R3_BATTLEFIELD_HEIGHT_PX / 2;
+    s32 maxY = R3_WORLD_HEIGHT_PX - (R3_BATTLEFIELD_HEIGHT_PX / 2);
+    if (worldX < minX) worldX = minX;
+    if (worldX > maxX) worldX = maxX;
+    if (worldY < minY) worldY = minY;
+    if (worldY > maxY) worldY = maxY;
+    cameraTargetXQ8 = worldX << R3_CAMERA_FP_SHIFT;
+    cameraTargetYQ8 = worldY << R3_CAMERA_FP_SHIFT;
+}
+
+void R3_battleUpdate(void)
+{
+    s16 speed;
+    bool targetMoved = FALSE;
+    bool cameraMoved = FALSE;
+    bool waterChanged = FALSE;
+    bool treesChanged = FALSE;
+    s32 oldCameraX, oldCameraY;
+    s32 targetX, targetY;
+
+    if (!active) return;
+
+    /* R3 test control moves a synthetic follow target. R4 only needs to call
+     * R3_battleSetCameraTarget(tankWorldX,tankWorldY); the camera code stays unchanged. */
+    speed = (padHeld & BUTTON_C) ? 4 : 2;
+    targetX = cameraTargetXQ8 >> R3_CAMERA_FP_SHIFT;
+    targetY = cameraTargetYQ8 >> R3_CAMERA_FP_SHIFT;
+    if (padHeld & BUTTON_LEFT)  { targetX -= speed; targetMoved = TRUE; }
+    if (padHeld & BUTTON_RIGHT) { targetX += speed; targetMoved = TRUE; }
+    if (padHeld & BUTTON_UP)    { targetY -= speed; targetMoved = TRUE; }
+    if (padHeld & BUTTON_DOWN)  { targetY += speed; targetMoved = TRUE; }
+    if (targetMoved) R3_battleSetCameraTarget(targetX, targetY);
+
+    oldCameraX = cameraCenterX;
+    oldCameraY = cameraCenterY;
+    cameraPosXQ8 = smoothCameraAxis(cameraPosXQ8, cameraTargetXQ8);
+    cameraPosYQ8 = smoothCameraAxis(cameraPosYQ8, cameraTargetYQ8);
+    cameraCenterX = cameraPosXQ8 >> R3_CAMERA_FP_SHIFT;
+    cameraCenterY = cameraPosYQ8 >> R3_CAMERA_FP_SHIFT;
+    cameraMoved = (cameraCenterX != oldCameraX) || (cameraCenterY != oldCameraY);
+
+    treeTick++;
+    if (treeTick >= R3_TREE_HOLD_TICKS)
+    {
+        treeTick = 0;
+        treeFrame = (treeFrame + 1) % WT_TREE_FRAMES;
+        treesChanged = TRUE;
+    }
+    waterTick++;
+    if (waterTick >= R3_WATER_HOLD_TICKS)
+    {
+        waterTick = 0;
+        waterFrame = (waterFrame + 1) % WT_WATER_FRAMES;
+        waterChanged = TRUE;
+    }
+
+    if (cameraMoved)
+    {
+        s16 tx = (s16)(cameraLeft() >> 3);
+        s16 ty = (s16)(cameraTop() >> 3);
+        if ((tx != lastCameraTileX) || (ty != lastCameraTileY)) updateStreaming();
+        applyScroll();
+        updateHudNumbers();
+    }
+
+    if (waterChanged || treesChanged) refreshVisibleAnimatedCells(waterChanged, treesChanged);
+
+    minimapTick++;
+    if ((targetMoved || cameraMoved) && minimapTick >= R3_MINIMAP_HOLD_TICKS)
+    {
+        minimapTick = 0;
+        drawMiniMap();
+    }
+}
+
+bool R3_pointInsideBattlefield(s16 screenX, s16 screenY)
+{
+    /* Future R4/R6 sprites must pass this culling gate before VDP submission. */
+    return (screenX >= 0) && (screenY >= 0) &&
+           (screenX < R3_BATTLEFIELD_WIDTH_PX) && (screenY < R3_BATTLEFIELD_HEIGHT_PX);
+}
