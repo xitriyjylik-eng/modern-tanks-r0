@@ -117,14 +117,12 @@ jobs:
           - Status: CANDIDATE until emulator visual acceptance
           EOF
 
-      - name: Publish R3 candidate
+      - name: Publish R3 candidate and exact source snapshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Modern_Tanks_R3_Clean_Candidate
+          name: Modern_Tanks_R3_Clean_Candidate_With_Source
           path: |
-            sgdk/out/Modern_Tanks_R3_CANDIDATE.bin
-            sgdk/out/R3_*.txt
-            sgdk/out/R3_*.json
-            sgdk/out/R3_BUILD_REPORT.md
-          if-no-files-found: warn
+            sgdk/**
+            .github/workflows/r3-clean-build.yml
+          if-no-files-found: error
