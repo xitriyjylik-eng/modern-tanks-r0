@@ -1,0 +1,144 @@
+name: R3 Visual Camera V3 SGDK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [r3-visual-camera-v3]
+    paths:
+      - 'r3/**'
+      - '.github/workflows/r3-visual-camera-v3.yml'
+
+jobs:
+  build-r3-v3:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply R3 visual and camera V3 source transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 r3/apply_visual_camera_v3.py
+          git diff --check
+          git diff -- sgdk/src/battle/battle_r3.c sgdk/inc/battle_r3.h sgdk/tools/build_r3_assets.py sgdk/tools/test_r3_world.py > /tmp/R3_V3_SOURCE.diff
+          wc -l /tmp/R3_V3_SOURCE.diff
+
+      - name: Restore R2 assets, generate R3 assets and stress test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          python3 sgdk/tools/build_refined_animation_assets.py
+          python3 sgdk/tools/build_r3_assets.py
+          python3 sgdk/tools/verify_r3_assets.py
+          python3 sgdk/tools/test_r3_world.py
+          mkdir -p sgdk/out
+          cp /tmp/R3_V3_SOURCE.diff sgdk/out/R3_V3_SOURCE.diff
+          sha256sum sgdk/res/r3_world_tiles.png sgdk/res/r3_hud_tiles.png | tee sgdk/out/R3_RESOURCE_SHA256.txt
+
+      - name: Verify visual, minimap and follow contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          from PIL import Image
+          root=Path('sgdk')
+          r2=Image.open(root/'res/r2_menu_bg.png'); r2.load()
+          assert hashlib.sha256(bytes(r2.getpalette())).hexdigest()=='b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          src=(root/'src/battle/battle_r3.c').read_text(encoding='utf-8')
+          hdr=(root/'inc/battle_r3.h').read_text(encoding='utf-8')
+          for token in ('WT_GRASS_BASE 1','WT_ROAD_BASE 193','WT_WATER_BASE 321','WT_SHORE_BASE 417','WT_BRIDGE_BASE 513','WT_TREE_BASE 769','WT_TREE_FRAME_TILES 12','R3_MINIMAP_SAMPLE_STEP 24','smoothCameraAxis','R3_battleSetCameraTarget'):
+              assert token in src or token in hdr, token
+          stress=json.loads((root/'out/R3_STREAM_STRESS.json').read_text())
+          assert stress['status']=='PASS'
+          assert stress['settles_exactly_on_target'] is True
+          assert stress['minimap_visible_world_px']=='1920x1536'
+          assert stress['max_follow_lag_px'] <= 32
+          report=json.loads((root/'res/R3_ASSET_REPORT.json').read_text())
+          assert report['world_tiles']==1024 and report['tree_frames']==12 and report['water_frames']==8
+          print('R3 V3 source/visual/follow contract PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r3v3-a /tmp/r3v3-b
+          cp -a sgdk /tmp/r3v3-a
+          cp -a sgdk /tmp/r3v3-b
+          rm -rf /tmp/r3v3-a/out /tmp/r3v3-b/out
+          mkdir -p /tmp/r3v3-a/out /tmp/r3v3-b/out
+          chmod -R a+rwX /tmp/r3v3-a /tmp/r3v3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/r3v3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/r3v3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/r3v3-a/out/rom.bin
+          test -f /tmp/r3v3-b/out/rom.bin
+          cmp /tmp/r3v3-a/out/rom.bin /tmp/r3v3-b/out/rom.bin
+          cp /tmp/r3v3-a/out/rom.bin sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin
+          sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin | tee sgdk/out/R3_V3_SHA256.txt
+          stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin | tee sgdk/out/R3_V3_ROM_SIZE.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin | tee sgdk/out/R3_V3_ROM_AUDIT.json
+
+      - name: Build report and source snapshot
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p sgdk/out R3_V3_FULL_PROJECT
+          SHA=NOT_BUILT; SIZE=NOT_BUILT
+          if [ -f sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin ]; then
+            SHA="$(sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin|awk '{print $1}')"
+            SIZE="$(stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_CAMERA_V3.bin)"
+          fi
+          cat > sgdk/out/R3_V3_BUILD_REPORT.md <<EOF
+          # Modern Tanks R3 — Visual / Camera V3 candidate
+          - Base: accepted R2 -> r3-clean tested candidate
+          - World: 8192x8192 px streamed ring tilemap
+          - Terrain addressing: coherent 32x32 / 16x16 metatiles
+          - Tree frames: full 32x24 (4x3 tiles), 12 phases
+          - Minimap: 24 world tiles per cell, approximately 1920x1536 px coverage
+          - Camera: Q8 smooth follow target; future tank can feed R3_battleSetCameraTarget()
+          - Accepted R2 palette: preserved exactly
+          - ROM size: ${SIZE}
+          - ROM SHA-256: ${SHA}
+          - Status: CANDIDATE pending emulator visual acceptance
+          EOF
+          cp -a sgdk R3_V3_FULL_PROJECT/sgdk
+          cp sgdk/out/R3_V3_BUILD_REPORT.md R3_V3_FULL_PROJECT/
+
+      - name: Publish R3 V3 candidate and exact transformed source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_Visual_Camera_V3_Candidate_With_Source
+          path: |
+            sgdk/**
+            R3_V3_FULL_PROJECT/**
+            r3/apply_visual_camera_v3.py
+            .github/workflows/r3-visual-camera-v3.yml
+          if-no-files-found: error
