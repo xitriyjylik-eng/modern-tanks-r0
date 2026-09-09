@@ -1,0 +1,9 @@
+ents':cross_y,'edge_bounces':bounces,
++    'camera_model':'Q8 target-follow, 1/8 response, 5px/frame cap','max_follow_lag_px':max_lag,
++    'settles_exactly_on_target':True,
++    'minimap_sample_step_tiles':MINIMAP_STEP_TILES,
++    'minimap_visible_world_px':f'{10*MINIMAP_STEP_TILES*8}x{8*MINIMAP_STEP_TILES*8}',
++    'status':'PASS'}
++out=Path(__file__).resolve().parents[1]/'out'; out.mkdir(exist_ok=True)
+ (out/'R3_STREAM_STRESS.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+ print(json.dumps(report,indent=2))

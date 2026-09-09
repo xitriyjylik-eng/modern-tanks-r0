@@ -1,0 +1,10 @@
+=(frame*2+band*5+var*3)%16; length=4+((band+var)%4)
+             for t in range(length):
+-                x=(start+t)%16; d.point((x,y),fill=1 if t in (1,2) else 2)
+-                if t==1 and (band+frame)%2==0 and y+1<16:d.point((x,y+1),fill=4)
++                x=(start+t)%16; d.point((x,y),fill=1 if 1<=t<=length-2 else 2)
++                if t==2 and (band+frame)%2==0 and y+1<16:d.point((x,y+1),fill=4)
++        for _ in range(5):d.point((r.randrange(16),r.randrange(16)),fill=r.choice([3,4,6,7]))
+         split_put(world,WATER_BASE+(var*WATER_FRAMES+frame)*4,im,2,2,WORLD_COLS)
+ 
+ for m in range(SHORE_META):

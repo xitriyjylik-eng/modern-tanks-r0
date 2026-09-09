@@ -1,0 +1,13 @@
+7==0 and yy+1<32:d.point((x,yy+1),fill=6)
++    for _ in range(6):
++        x=r.randrange(2,30); y=r.randrange(2,30); c=r.choice([1,6,9,12]); d.rectangle((x,y,x+1,y+1),fill=c)
+     split_put(world,ROAD_BASE+v*16,im,4,4,WORLD_COLS)
+ 
+ for var in range(WATER_VARIANTS):
+     for frame in range(WATER_FRAMES):
+         im=pimg(16,16,5); d=ImageDraw.Draw(im); r=random.Random(3000+var*100+frame)
+-        for _ in range(14): d.point((r.randrange(16),r.randrange(16)),fill=r.choice([3,4,6,7,9,10,13]))
++        # Long horizontal highlights make flow read as water instead of blue noise.
+         for band in range(4):
+-            y=(2+band*4+(var&1))%16; start=(frame*2+band*5+var*3)%16; length=3+((band+var)%3)
++            y=(2+band*4+(var&1))%16; start

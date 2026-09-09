@@ -1,0 +1,14 @@
+atiles. The previous version varied every
++    # 8x8 cell too aggressively; these keep the R2 palette but move detail to
++    # broader patches and sparse blades.
++    r=random.Random(1000+v); im=pimg(32,32,4); d=ImageDraw.Draw(im)
++    for _ in range(7):
++        x=r.randrange(-8,32); y=r.randrange(-8,32); rx=r.randrange(5,13); ry=r.randrange(3,9)
++        c=r.choice([3,5,6,7,8]); d.ellipse((x-rx,y-ry,x+rx,y+ry),fill=c)
++    for _ in range(22):
++        x=r.randrange(1,31); y=r.randrange(2,31); c=r.choice([1,2,7,8,10])
++        d.point((x,y),fill=c)
++        if r.random()<.55:d.point((x,y-1),fill=c)
++        if r.random()<.20 and x+1<32:d.point((x+1,y),fill=c)
++    for _ in range(5):
++        x=r.randrange(3,29); y=r.randrange(3,29); c=r.c

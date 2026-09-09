@@ -1,0 +1,15 @@
+hoice([9,10,12])
++        d.rectangle((x,y,x+r.randrange(1,3),y+r.randrange(0,2)),fill=c)
++    split_put(world,GRASS_BASE+v*16,im,4,4,WORLD_COLS)
++
++for v in range(ROAD_META):
++    # Consistent dirt surface; variation is detail, not a checkerboard of base hues.
++    r=random.Random(2000+v); im=pimg(32,32,4); d=ImageDraw.Draw(im)
+     for _ in range(10):
+-        x=r.randrange(2,30); y=r.randrange(2,30); c=r.choice([9,10,12,13]); d.rectangle((x,y,x+r.randrange(1,3),y+r.randrange(0,2)),fill=c)
+-    split_put(world,GRASS_BASE+v*16,im,4,4,WORLD_COLS)
+-
+-for v in range(ROAD_META):
+-    r=random.Random(2000+v); im=pimg(32,32,r.choice([2,3,4,5])); d=ImageDraw.Draw(im)
+-    for _ in range(26):
+-        x=r.randrange(-3,32); y=r.randrange(-3,32); w=

@@ -1,0 +1,14 @@
+--- a/sgdk/tools/build_r3_assets.py
++++ b/sgdk/tools/build_r3_assets.py
+@@ -72,38 +72,47 @@
+ world=pimg(WORLD_COLS*8,WORLD_ROWS*8,0); put_tile(world,BLANK,[[0]*8 for _ in range(8)],WORLD_COLS)
+ 
+ for v in range(GRASS_META):
+-    r=random.Random(1000+v); im=pimg(32,32,4+(v%3)); d=ImageDraw.Draw(im)
+-    for _ in range(18):
+-        x=r.randrange(-4,32); y=r.randrange(-4,32); rr=r.choice([1,2,3,4,5]); c=r.choice([1,2,3,5,6,7,8,9,10,11,12]); d.ellipse((x-rr,y-rr,x+rr,y+rr),fill=c)
+-    for _ in range(44):
+-        x=r.randrange(1,31); y=r.randrange(1,31); c=r.choice([1,2,7,8,10,11]); d.point((x,y),fill=c)
+-        if r.random()<.45:d.point((x,y-1),fill=c)
+-        if r.random()<.18:d.point((x+1,y),fill=c)
++    # Calm, coherent 32x32 ground met

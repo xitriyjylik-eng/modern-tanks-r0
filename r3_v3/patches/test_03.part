@@ -1,0 +1,18 @@
+x+PLANE_W-1
+         for y in range(origin_y,origin_y+PLANE_H): load_cell(wx,y)
+     while origin_x>target_x:
+         origin_x-=1; cross_x+=1
+         for y in range(origin_y,origin_y+PLANE_H): load_cell(origin_x,y)
+     while origin_y<target_y:
+-        origin_y+=1; cross_y+=1
+-        wy=origin_y+PLANE_H-1
++        origin_y+=1; cross_y+=1; wy=origin_y+PLANE_H-1
+         for x in range(origin_x,origin_x+PLANE_W): load_cell(x,wy)
+     while origin_y>target_y:
+         origin_y-=1; cross_y+=1
+         for x in range(origin_x,origin_x+PLANE_W): load_cell(x,origin_y)
+ 
+-    # Check every visible tile plus a 1-tile guard at representative intervals.
+     if tick%47==0:
+         for y in range(camy-1,camy+25):
+             for x in range(camx-1

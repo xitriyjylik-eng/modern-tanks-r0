@@ -1,0 +1,21 @@
+maxx:
+-        cx=max(minx,min(maxx,cx)); vx=-vx; bounces+=1
+-    if cy<miny or cy>maxy:
+-        cy=max(miny,min(maxy,cy)); vy=-vy; bounces+=1
++    tx += vx; ty += vy
++    if tx<minx or tx>maxx:
++        tx=max(minx,min(maxx,tx)); vx=-vx; bounces+=1
++    if ty<miny or ty>maxy:
++        ty=max(miny,min(maxy,ty)); vy=-vy; bounces+=1
++
++    cxq=smooth(cxq,tx<<FP); cyq=smooth(cyq,ty<<FP)
++    cx=cxq>>FP; cy=cyq>>FP
++    max_lag=max(max_lag,abs(tx-cx),abs(ty-cy))
++    assert minx<=cx<=maxx and miny<=cy<=maxy
++
+     camx=(cx-VIEW_W//2)>>3; camy=(cy-VIEW_H//2)>>3
+     target_x=camx-PREF_L; target_y=camy-PREF_T
+     while origin_x<target_x:
+-        origin_x+=1; cross_x+=1
+-        wx=origin_x+PLANE_W-1
++        origin_x+=1; cross_x+=1; wx=origin_

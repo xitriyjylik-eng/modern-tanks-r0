@@ -1,0 +1,15 @@
+,camx+29):
+                 assert slots[slot(x,y)]==(x,y),(tick,x,y,slots.get(slot(x,y)))
+-        assert minx<=cx<=maxx and miny<=cy<=maxy
+ 
+-report={'ticks':TICKS,'nominal_minutes':10,'ring':'64x32','world_px':'8192x8192','column_stream_events':cross_x,'row_stream_events':cross_y,'edge_bounces':bounces,'status':'PASS'}
+-out=Path(__file__).resolve().parents[1]/'out'
+-out.mkdir(exist_ok=True)
++# Stop target and require exact convergence, proving no permanent offset/drift.
++for _ in range(240):
++    cxq=smooth(cxq,tx<<FP); cyq=smooth(cyq,ty<<FP)
++assert cxq==(tx<<FP) and cyq==(ty<<FP), (cxq,cyq,tx,ty)
++
++report={
++    'ticks':TICKS,'nominal_minutes':10,'ring':'64x32','world_px':'8192x8192',
++    'column_stream_events':cross_x,'row_stream_ev

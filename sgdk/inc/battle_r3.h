@@ -14,6 +14,7 @@ void R3_battleEnter(void);
 void R3_battleLeave(void);
 void R3_battleSetInput(u16 held, u16 pressed);
 void R3_battleUpdate(void);
+void R3_battleSetCameraTarget(s32 worldX, s32 worldY);
 bool R3_pointInsideBattlefield(s16 screenX, s16 screenY);
 
 #endif

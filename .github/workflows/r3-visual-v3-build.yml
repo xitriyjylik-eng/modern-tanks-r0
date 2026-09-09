@@ -1,0 +1,151 @@
+name: R3 Visual V3 SGDK Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [r3-visual-v3]
+    paths:
+      - 'sgdk/**'
+      - 'r3_v3/**'
+      - '.github/workflows/r3-visual-v3-build.yml'
+
+jobs:
+  build-r3-v3:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact V3 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat r3_v3/patches/assets_*.part > /tmp/r3-assets.patch
+          cat r3_v3/patches/test_*.part > /tmp/r3-test.patch
+          git apply --check /tmp/r3-assets.patch
+          git apply /tmp/r3-assets.patch
+          git apply --check /tmp/r3-test.patch
+          git apply /tmp/r3-test.patch
+          cat sgdk/src/battle/v3_parts/battle_r3_v3_*.inc > /tmp/battle_r3_v3.c
+          echo '49b106a59ccb96d99aeaf47c2c1657bc2c6fc26c3f7c23dd329934963db232f9  /tmp/battle_r3_v3.c' | sha256sum -c -
+          echo 'ffbbaba5d183cde94acabef052b5c952082d93653f2a6845e45a6eac0f7f6cce  sgdk/inc/battle_r3.h' | sha256sum -c -
+          echo '2834ce642c5865c7682b4f499fb1131f55ecef2a32de7470ba15b61f64a18b57  sgdk/tools/build_r3_assets.py' | sha256sum -c -
+          echo 'f6336b18c4ccc35ad74eac63d4c6882e773428ca10f098228d9ab3ccc0ddcfd2  sgdk/tools/test_r3_world.py' | sha256sum -c -
+          git diff --check
+
+      - name: Generate and verify Visual V3 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          python3 sgdk/tools/build_refined_animation_assets.py
+          python3 sgdk/tools/build_r3_assets.py
+          python3 sgdk/tools/verify_r3_assets.py
+          python3 sgdk/tools/test_r3_world.py
+          mkdir -p sgdk/out
+          echo 'dfd39ce446c16a142baf999c4ec1da9bd68c056c8d622e51c9ce5e79714ab668  sgdk/res/r3_world_tiles.png' | sha256sum -c -
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import hashlib, json
+          root=Path('sgdk')
+          r2=Image.open(root/'res/r2_menu_bg.png'); r2.load()
+          assert hashlib.sha256(bytes(r2.getpalette())).hexdigest()=='b21fe2dc53ee77cefd085d08f3251cb64627a41f688602daf394f1915ddffc37'
+          report=json.loads((root/'res/R3_ASSET_REPORT.json').read_text())
+          assert report['world_tiles']==1024 and report['hud_tiles']==128
+          assert report['world_unique_tiles']==861 and report['total_r3_pattern_bytes']==36864
+          stress=json.loads((root/'out/R3_STREAM_STRESS.json').read_text())
+          assert stress['status']=='PASS' and stress['settles_exactly_on_target'] is True
+          assert stress['minimap_visible_world_px']=='1920x1536'
+          print('R3 Visual V3 host gate PASS')
+          PY
+
+      - name: Verify renderer contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=''.join(p.read_text(encoding='utf-8') for p in sorted(Path('sgdk/src/battle/v3_parts').glob('battle_r3_v3_*.inc')))
+          hdr=Path('sgdk/inc/battle_r3.h').read_text(encoding='utf-8')
+          main=Path('sgdk/src/main.c').read_text(encoding='utf-8')
+          for token in ('R3_PLANE_W 64','R3_PLANE_H 32','R3_MINIMAP_SAMPLE_STEP 24','valueNoise8','WT_TREE_FRAMES 12','WT_WATER_FRAMES 8','R3_battleSetCameraTarget'):
+              assert token in src or token in hdr, token
+          for token in ('R3_battleEnter','R3_battleLeave','R3_battleSetInput','R3_battleUpdate'):
+              assert token in main, token
+          print('R3 Visual V3 renderer contract PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_V3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_V3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r3v3-a /tmp/r3v3-b
+          cp -a sgdk /tmp/r3v3-a
+          cp -a sgdk /tmp/r3v3-b
+          rm -rf /tmp/r3v3-a/out /tmp/r3v3-b/out
+          mkdir -p /tmp/r3v3-a/out /tmp/r3v3-b/out
+          chmod -R a+rwX /tmp/r3v3-a /tmp/r3v3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/r3v3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/r3v3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/r3v3-a/out/rom.bin
+          test -f /tmp/r3v3-b/out/rom.bin
+          cmp /tmp/r3v3-a/out/rom.bin /tmp/r3v3-b/out/rom.bin
+          cp /tmp/r3v3-a/out/rom.bin sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin
+          sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin | tee sgdk/out/R3_V3_SHA256.txt
+          stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin | tee sgdk/out/R3_V3_ROM_SIZE.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin | tee sgdk/out/R3_V3_ROM_AUDIT.json
+
+      - name: Candidate report
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p sgdk/out
+          SHA=NOT_BUILT; SIZE=NOT_BUILT
+          if [ -f sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin ]; then SHA="$(sha256sum sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin|awk '{print $1}')"; SIZE="$(stat -c '%s' sgdk/out/Modern_Tanks_R3_VISUAL_V3_CANDIDATE.bin)"; fi
+          cat > sgdk/out/R3_VISUAL_V3_BUILD_REPORT.md <<EOF
+          # Modern Tanks R3 Visual V3 Candidate
+          - Base technical R3 V2: 18ef1b62cec69da47237185d4f1712d0a3ca5899
+          - World: 8192x8192 px; 64x32 streamed ring cache
+          - Visual: calmer 32x32 metatiles, coherent river/shore/bridge, natural forest field
+          - Ambient: 12-phase 32x24 trees; 8-phase water
+          - Camera: Q8 smooth target-follow, 1/8 response, 5 px/frame cap
+          - Minimap coverage: 1920x1536 world px
+          - ROM size: ${SIZE}
+          - ROM SHA-256: ${SHA}
+          - Status: CANDIDATE pending owner emulator acceptance
+          EOF
+
+      - name: Publish exact candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_VISUAL_V3_Candidate_With_Source
+          path: |
+            sgdk/**
+            r3_v3/**
+            .github/workflows/r3-visual-v3-build.yml
+          if-no-files-found: error

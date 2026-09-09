@@ -1,0 +1,12 @@
+r.randrange(1,6); h=r.randrange(1,4); c=r.choice([1,2,3,4,5,6,7,8,9,10,11,12]); d.ellipse((x,y,x+w,y+h),fill=c)
+-    for yy in (8+(v%3),23-((v+1)%3)):
++        x=r.randrange(-4,32); y=r.randrange(-4,32); w=r.randrange(3,11); h=r.randrange(2,6)
++        c=r.choice([2,3,5,6,8]); d.ellipse((x,y,x+w,y+h),fill=c)
++    for yy in (8+(v%2),23-((v+1)%2)):
+         for x in range(32):
+-            if (x+r.randrange(3))%4:d.point((x,yy),fill=r.choice([8,9,10,11]))
+-            if r.random()<.25 and yy+1<32:d.point((x,yy+1),fill=6)
+-    for _ in range(9):
+-        x=r.randrange(1,30); y=r.randrange(1,30); c=r.choice([1,6,9,12]); d.rectangle((x,y,x+1,y+1),fill=c)
++            if ((x+v)&3)!=0:d.point((x,yy),fill=r.choice([8,9,10]))
++            if (x+v)%

@@ -1,0 +1,26 @@
++    if step==0: step=1 if delta>0 else -1
++    return pos+step
++
++minx=VIEW_W//2; maxx=WORLD_PX-VIEW_W//2
++miny=VIEW_H//2; maxy=WORLD_PX-VIEW_H//2
++# Synthetic future tank target. Camera follows this rather than being moved directly.
++tx=ty=WORLD_PX//2
++cxq=tx<<FP; cyq=ty<<FP
++origin_x=((tx-VIEW_W//2)>>3)-PREF_L
++origin_y=((ty-VIEW_H//2)>>3)-PREF_T
+ slots={}
+ 
+ def slot(wx,wy): return (wx&63,wy&31)
+@@ -18,43 +30,52 @@
+         for x in range(origin_x,origin_x+PLANE_W): load_cell(x,y)
+ fill()
+ 
+-cross_x=cross_y=0
+-bounces=0
+-vx=4; vy=3
+-minx=VIEW_W//2; maxx=WORLD_PX-VIEW_W//2
+-miny=VIEW_H//2; maxy=WORLD_PX-VIEW_H//2
++cross_x=cross_y=0; bounces=0; vx=4; vy=3; max_lag=0
+ for tick in range(TICKS):
+-    cx += vx; cy += vy
+-    if cx<minx or cx>
