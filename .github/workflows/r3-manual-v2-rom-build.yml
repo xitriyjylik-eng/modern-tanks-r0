@@ -3,7 +3,7 @@ name: R3 Manual V2 ROM Build
 on:
   pull_request:
     paths:
-      - 'r3_build_payload.part_*'
+      - 'r3_payload2.part_*'
       - '.github/workflows/r3-manual-v2-rom-build.yml'
   workflow_dispatch:
 
@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat r3_build_payload.part_* | base64 -d > /tmp/r3_payload.tar.gz
+          cat r3_payload2.part_* | base64 -d > /tmp/r3_payload.tar.gz
           tar -xzf /tmp/r3_payload.tar.gz -C .
           test -f sgdk/res/r2_menu_bg.png
           test -f sgdk/res/r3_manual_ground.png
