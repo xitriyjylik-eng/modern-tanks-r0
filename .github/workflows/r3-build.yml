@@ -27,8 +27,26 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p sgdk/out
-          cat r3/R3_IMPLEMENTATION.patch.gz.b64.part* | tr -d '\r\n' | base64 -d | gzip -d > /tmp/R3_IMPLEMENTATION.patch
-          echo "Patch bytes: $(stat -c '%s' /tmp/R3_IMPLEMENTATION.patch)"
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, gzip, hashlib
+
+          parts=sorted(Path('r3').glob('R3_IMPLEMENTATION.patch.gz.b64.part*'))
+          assert len(parts)==4, [str(p) for p in parts]
+          text=''.join(p.read_text(encoding='ascii') for p in parts)
+          alphabet=set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
+          bad=sorted(set(ch for ch in text if not ch.isspace() and ch not in alphabet))
+          assert not bad, f'non-base64 characters: {bad}'
+          clean=''.join(ch for ch in text if ch in alphabet)
+          clean += '=' * (-len(clean) % 4)
+          print('parts:', [p.name for p in parts])
+          print('base64 chars:', len(clean))
+          compressed=base64.b64decode(clean, validate=True)
+          print('gzip bytes:', len(compressed), hashlib.sha256(compressed).hexdigest())
+          patch=gzip.decompress(compressed)
+          print('patch bytes:', len(patch), hashlib.sha256(patch).hexdigest())
+          Path('/tmp/R3_IMPLEMENTATION.patch').write_bytes(patch)
+          PY
           sha256sum /tmp/R3_IMPLEMENTATION.patch | tee sgdk/out/R3_PATCH_SHA256.txt
           git apply --check /tmp/R3_IMPLEMENTATION.patch
           git apply /tmp/R3_IMPLEMENTATION.patch
@@ -67,18 +85,13 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          src='\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in Path('sgdk/src').rglob('*.[ch]'))
+          files=[p for p in Path('sgdk/src').rglob('*') if p.is_file() and p.suffix in ('.c','.h')]
+          src='\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in files)
           res=Path('sgdk/res/resources.res').read_text(encoding='utf-8',errors='ignore')
-          required=(
-              '8192',
-              'R3',
-              'VDP_setHorizontalScroll',
-              'VDP_setVerticalScroll',
-          )
-          for token in required:
-              assert token in src or token in res, token
+          assert '8192' in src, '8192x8192 world contract missing'
           assert 'r3_world_tiles' in res, 'r3_world_tiles resource missing'
           assert Path('sgdk/res/r3_world_tiles.png').exists()
+          assert 'PLAN_A' in src and 'PLAN_B' in src, 'two-plane renderer contract missing'
           print('R3 source contract PASS')
           PY
 
@@ -150,6 +163,24 @@ jobs:
           - Gate: CANDIDATE until owner emulator acceptance
           REPORT
 
+      - name: Stage full R3 source package
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf R3_FULL_PROJECT
+          mkdir -p R3_FULL_PROJECT/PROJECT_SOURCE
+          cp -a sgdk R3_FULL_PROJECT/PROJECT_SOURCE/sgdk
+          cp -a r3 R3_FULL_PROJECT/R3_PATCH_PACKAGE
+          cp sgdk/out/R3_BUILD_REPORT.md R3_FULL_PROJECT/R3_BUILD_REPORT.md
+          cat > R3_FULL_PROJECT/README_R3_CANDIDATE.md <<'REPORT'
+          # Modern Tanks R3 candidate
+          Основа: принятый R2 commit a1faa7d567ceb7f5506005b354da28f5c1ea0cee.
+          R3: Battle Renderer / HUD, большая потоковая карта 8192x8192, Plane A/B, фиксированный HUD, анимированные деревья и вода.
+          Статус остаётся CANDIDATE до визуальной проверки ROM владельцем в эмуляторе.
+          DEV-ветка не используется.
+          REPORT
+
       - name: Publish R3 candidate
         if: always()
         uses: actions/upload-artifact@v4
@@ -165,4 +196,5 @@ jobs:
             sgdk/out/R3_GENERATED_RESOURCES.txt
             sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
             sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+            R3_FULL_PROJECT/**
           if-no-files-found: warn
