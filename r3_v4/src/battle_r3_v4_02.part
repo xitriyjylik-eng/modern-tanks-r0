@@ -1,0 +1,200 @@
+    VDP_setVerticalScroll(BG_B, sy);
+}
+
+static u16 glyphId(char c)
+{
+    u16 i = 0;
+    while (r3Charset[i])
+    {
+        if (r3Charset[i] == c) return HT_GLYPH_BASE + i;
+        i++;
+    }
+    return HT_GLYPH_BASE + 39; /* space */
+}
+
+static void hudText(u16 x, u16 y, const char *text)
+{
+    while (*text && x < 40)
+    {
+        VDP_setTileMapXY(WINDOW,
+                         TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, hudTileBase + glyphId(*text)),
+                         x++, y);
+        text++;
+    }
+}
+
+static void hudNumber4(u16 x, u16 y, u16 value)
+{
+    char s[5];
+    s[4] = 0;
+    s[3] = '0' + (value % 10); value /= 10;
+    s[2] = '0' + (value % 10); value /= 10;
+    s[1] = '0' + (value % 10); value /= 10;
+    s[0] = '0' + (value % 10);
+    hudText(x, y, s);
+}
+
+enum R3MiniClass
+{
+    R3_MINI_GRASS = 0,
+    R3_MINI_FOREST,
+    R3_MINI_ROAD,
+    R3_MINI_WATER,
+    R3_MINI_BRIDGE
+};
+
+static u16 miniMapClassAt(s16 wx, s16 wy)
+{
+    if (!worldInBounds(wx, wy)) return R3_MINI_GRASS;
+    if (isBridge(wx, wy)) return R3_MINI_BRIDGE;
+    if (isWater(wx, wy)) return R3_MINI_WATER;
+    if (isRoad(wx, wy) || isShore(wx, wy)) return R3_MINI_ROAD;
+    if (forestField(wx, wy)) return R3_MINI_FOREST;
+    return R3_MINI_GRASS;
+}
+
+static u16 miniMapAttrBlock(s16 centerX, s16 centerY)
+{
+    static const s16 sample[3] = {-8, 0, 8};
+    u16 counts[5] = {0,0,0,0,0};
+    u16 ix, iy, cls;
+    for (iy = 0; iy < 3; iy++)
+        for (ix = 0; ix < 3; ix++)
+        {
+            cls = miniMapClassAt(centerX + sample[ix], centerY + sample[iy]);
+            counts[cls]++;
+        }
+
+    if (counts[R3_MINI_BRIDGE]) cls = R3_MINI_BRIDGE;
+    else if (counts[R3_MINI_WATER] >= 2) cls = R3_MINI_WATER;
+    else if (counts[R3_MINI_ROAD]) cls = R3_MINI_ROAD;
+    else if (counts[R3_MINI_FOREST] >= 3) cls = R3_MINI_FOREST;
+    else cls = R3_MINI_GRASS;
+
+    if (cls == R3_MINI_WATER) return TILE_ATTR_FULL(PAL1, TRUE, FALSE, FALSE, hudTileBase + HT_SOLID);
+    if (cls == R3_MINI_ROAD || cls == R3_MINI_BRIDGE) return TILE_ATTR_FULL(PAL3, TRUE, FALSE, FALSE, hudTileBase + HT_SOLID);
+    if (cls == R3_MINI_FOREST) return TILE_ATTR_FULL(PAL2, TRUE, FALSE, FALSE, hudTileBase + HT_SOLID);
+    return TILE_ATTR_FULL(PAL2, TRUE, FALSE, FALSE, hudTileBase + HT_BG);
+}
+
+static void drawMiniMap(void)
+{
+    s16 centerTileX = (s16)(cameraTargetXQ8 >> (R3_CAMERA_FP_SHIFT + 3));
+    s16 centerTileY = (s16)(cameraTargetYQ8 >> (R3_CAMERA_FP_SHIFT + 3));
+    u16 x, y;
+    for (y = 0; y < R3_MINIMAP_H; y++)
+    {
+        for (x = 0; x < R3_MINIMAP_W; x++)
+        {
+            s16 wx = centerTileX + ((s16)x - (R3_MINIMAP_W / 2)) * R3_MINIMAP_SAMPLE_STEP;
+            s16 wy = centerTileY + ((s16)y - (R3_MINIMAP_H / 2)) * R3_MINIMAP_SAMPLE_STEP;
+            VDP_setTileMapXY(WINDOW, miniMapAttrBlock(wx, wy), R3_MINIMAP_X + x, R3_MINIMAP_Y + y);
+        }
+    }
+    VDP_setTileMapXY(WINDOW,
+                     TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, hudTileBase + HT_DOT),
+                     R3_MINIMAP_X + R3_MINIMAP_W / 2,
+                     R3_MINIMAP_Y + R3_MINIMAP_H / 2);
+}
+
+static void drawHudFrame(void)
+{
+    u16 x, y;
+    u16 bg = TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, hudTileBase + HT_BG);
+    u16 line = TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, hudTileBase + HT_HLINE);
+
+    /* Window is an L shape because Genesis combines H/V window conditions with OR. */
+    VDP_setWindowHPos(TRUE, 14); /* 14 * 16 = 224px -> right 96px */
+    VDP_setWindowVPos(TRUE, 24); /* 24 * 8 = 192px -> bottom 32px */
+
+    for (y = 0; y < 28; y++)
+        for (x = 0; x < 40; x++)
+            VDP_setTileMapXY(WINDOW, bg, x, y);
+
+    for (y = 0; y < 24; y++) VDP_setTileMapXY(WINDOW,
+        TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, hudTileBase + HT_VLINE), 28, y);
+    for (x = 0; x < 40; x++) VDP_setTileMapXY(WINDOW, line, x, 24);
+
+    hudText(30, 1, "TANK");
+    hudText(29, 3, "ARMOR 100");
+    hudText(29, 5, "AMMO  024");
+    hudText(30, 17, "TACTICAL");
+    hudText(29, 20, "C CAMERA");
+    hudText(29, 22, "B MENU");
+    hudText(1, 25, "SECTOR 01 / NO CONTACT / ORDERS: RECON");
+    hudText(1, 27, "ENGINE READY     BRIDGE ROUTE ACTIVE");
+    drawMiniMap();
+}
+
+static void updateHudNumbers(void)
+{
+    /* Combat values arrive in later stages; do not expose debug coordinates. */
+}
+
+static void refreshVisibleAnimatedCells(bool waterChanged, bool treesChanged)
+{
+    s16 left = (s16)(cameraLeft() >> 3) - 1;
+    s16 top = (s16)(cameraTop() >> 3) - 1;
+    s16 x, y;
+    for (y = top; y < top + R3_VIEW_H_TILES + 2; y++)
+    {
+        for (x = left; x < left + R3_VIEW_W_TILES + 2; x++)
+        {
+            if (waterChanged && isWater(x, y))
+                VDP_setTileMapXY(BG_B, baseTileAttr(x, y), ((u16)x)&63, ((u16)y)&31);
+            if (treesChanged)
+                VDP_setTileMapXY(BG_A, overlayTileAttr(x, y), ((u16)x)&63, ((u16)y)&31);
+        }
+    }
+}
+
+static void updateStreaming(void)
+{
+    s16 camTileX = (s16)(cameraLeft() >> 3);
+    s16 camTileY = (s16)(cameraTop() >> 3);
+    s16 targetOriginX = camTileX - R3_PREFETCH_LEFT;
+    s16 targetOriginY = camTileY - R3_PREFETCH_TOP;
+
+    while (loadedOriginX < targetOriginX)
+    {
+        loadedOriginX++;
+        streamColumn(loadedOriginX + R3_PLANE_W - 1);
+    }
+    while (loadedOriginX > targetOriginX)
+    {
+        loadedOriginX--;
+        streamColumn(loadedOriginX);
+    }
+    while (loadedOriginY < targetOriginY)
+    {
+        loadedOriginY++;
+        streamRow(loadedOriginY + R3_PLANE_H - 1);
+    }
+    while (loadedOriginY > targetOriginY)
+    {
+        loadedOriginY--;
+        streamRow(loadedOriginY);
+    }
+
+    lastCameraTileX = camTileX;
+    lastCameraTileY = camTileY;
+}
+
+void R3_battleEnter(void)
+{
+    u16 next;
+    if (active) return;
+
+    VDP_setTextPlane(BG_A);
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_clearPlane(WINDOW, TRUE);
+
+    /* Keep exactly the accepted R2 64-color visual language in CRAM. */
+    PAL_setColors(0, r2_menu_bg.palette->data, r2_menu_bg.palette->length, CPU);
+
+    worldTileBase = TILE_USER_INDEX;
+    next = worldTileBase + r3_world_tiles.numTile;
+    hudTileBase = next;
+    next += r3_hud_tiles.numTile;
+    if ((next - 1) > TILE_USER_MAX_INDEX)
