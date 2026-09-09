@@ -1,0 +1,148 @@
+name: R3 Recovered Candidate SGDK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [r3-candidate]
+    paths:
+      - '.github/workflows/r3-build-recovered.yml'
+
+jobs:
+  build-r3:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover, verify and apply R3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          python3 r3/recover_patch.py --out /tmp/R3_IMPLEMENTATION.patch
+          sha256sum /tmp/R3_IMPLEMENTATION.patch | tee sgdk/out/R3_PATCH_SHA256.txt
+          git apply --check /tmp/R3_IMPLEMENTATION.patch
+          git apply /tmp/R3_IMPLEMENTATION.patch
+          git diff --check
+          git status --short
+
+      - name: Generate R3 assets and run stress tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          shopt -s nullglob
+          generators=(sgdk/tools/build_r3*.py)
+          tests=(sgdk/tools/test_r3*.py sgdk/tools/verify_r3*.py)
+          test ${#generators[@]} -gt 0
+          test ${#tests[@]} -gt 0
+          for f in "${generators[@]}"; do echo "RUN $f"; python3 "$f"; done
+          for f in "${tests[@]}"; do echo "RUN $f"; python3 "$f"; done
+          find sgdk/res -maxdepth 1 -type f -name 'r3_*' -printf '%f %s bytes\n' | sort | tee sgdk/out/R3_GENERATED_RESOURCES.txt
+
+      - name: Verify R3 renderer contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src='\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in Path('sgdk/src').rglob('*') if p.is_file() and p.suffix in ('.c','.h'))
+          res=Path('sgdk/res/resources.res').read_text(encoding='utf-8',errors='ignore')
+          assert '8192' in src
+          assert 'PLAN_A' in src and 'PLAN_B' in src
+          assert 'r3_world_tiles' in res
+          assert Path('sgdk/res/r3_world_tiles.png').exists()
+          print('R3 renderer contract PASS')
+          PY
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+          cp -a sgdk /tmp/sgdk-r3-a
+          cp -a sgdk /tmp/sgdk-r3-b
+          rm -rf /tmp/sgdk-r3-a/out /tmp/sgdk-r3-b/out
+          mkdir -p /tmp/sgdk-r3-a/out /tmp/sgdk-r3-b/out
+          chmod -R a+rwX /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/sgdk-r3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/sgdk-r3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/sgdk-r3-a/out/rom.bin
+          test -f /tmp/sgdk-r3-b/out/rom.bin
+          cmp /tmp/sgdk-r3-a/out/rom.bin /tmp/sgdk-r3-b/out/rom.bin
+          cp /tmp/sgdk-r3-a/out/rom.bin sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R3_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R3_ROM_AUDIT.json
+          stat -c '%s' sgdk/out/rom.bin | tee sgdk/out/R3_ROM_SIZE.txt
+
+      - name: Stage full candidate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out R3_FULL_PROJECT/PROJECT_SOURCE
+          ROM_SHA=NOT_BUILT; ROM_SIZE=NOT_BUILT
+          if [ -f sgdk/out/rom.bin ]; then ROM_SHA="$(sha256sum sgdk/out/rom.bin|awk '{print $1}')"; ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"; fi
+          cat > sgdk/out/R3_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R3 — Battle Renderer / HUD Candidate
+          - Commit: ${GITHUB_SHA}
+          - Base accepted R2: a1faa7d567ceb7f5506005b354da28f5c1ea0cee
+          - SGDK: 2.11 pinned
+          - ROM size: ${ROM_SIZE}
+          - ROM SHA-256: ${ROM_SHA}
+          - World stress target: 8192x8192 px
+          - Renderer: streamed large world, independent Plane A / Plane B
+          - HUD: fixed 96px right panel + 32px event log
+          - Ambient: phased trees + animated water
+          - Status: CANDIDATE pending owner emulator acceptance
+          REPORT
+          rm -rf R3_FULL_PROJECT
+          mkdir -p R3_FULL_PROJECT/PROJECT_SOURCE
+          cp -a sgdk R3_FULL_PROJECT/PROJECT_SOURCE/sgdk
+          cp -a r3 R3_FULL_PROJECT/R3_PATCH_PACKAGE
+          cp sgdk/out/R3_BUILD_REPORT.md R3_FULL_PROJECT/
+          cat > R3_FULL_PROJECT/README_R3_CANDIDATE.md <<'REPORT'
+          # Modern Tanks R3 candidate
+          База — принятый R2. DEV не используется.
+          R3 реализует фундамент большой прокручиваемой карты 8192x8192, двухслойный рендер, фиксированный HUD, анимированные деревья и воду.
+          Статус CANDIDATE до визуальной проверки ROM в эмуляторе.
+          REPORT
+
+      - name: Publish R3 full candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_FULL_PROJECT_R3_CANDIDATE_2026-09-09
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R3_*.txt
+            sgdk/out/R3_*.json
+            sgdk/out/R3_BUILD_REPORT.md
+            R3_FULL_PROJECT/**
+          if-no-files-found: warn
