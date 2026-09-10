@@ -66,12 +66,6 @@ jobs:
           set -euo pipefail
           python3 sgdk/tools/r3_ci_overlay_small.py restore
 
-      - name: Generate accepted R2 ambient assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 sgdk/tools/build_refined_animation_assets.py
-
       - name: Verify R3 map and camera contract
         shell: bash
         run: |
@@ -79,6 +73,12 @@ jobs:
           mkdir -p sgdk/out
           python3 sgdk/tools/r3_ci_overlay_small.py verify
           sha256sum sgdk/res/r3_region1_playable.png sgdk/res/r3_region1_map.png sgdk/res/r3_battle_hud.png > sgdk/out/R3_RESOURCE_SHA256.txt
+
+      - name: Generate accepted R2 ambient assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/build_refined_animation_assets.py
 
       - name: Pin SGDK 2.11
         shell: bash
