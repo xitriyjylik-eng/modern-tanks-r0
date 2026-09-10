@@ -64,13 +64,27 @@ PY
   EMU_PID=$!
 
   local win=''
-  for _ in $(seq 1 80); do
-    if ! kill -0 "$EMU_PID" 2>/dev/null; then cat "$out/blastem.log" >&2 || true; return 1; fi
-    win="$(xdotool search --onlyvisible --name 'BlastEm' 2>/dev/null | head -n1 || true)"
+  for _ in $(seq 1 120); do
+    if ! kill -0 "$EMU_PID" 2>/dev/null; then
+      echo "$name: BlastEm exited before creating a usable window" >&2
+      cat "$out/blastem.log" >&2 || true
+      return 1
+    fi
+    win="$(xdotool search --onlyvisible --pid "$EMU_PID" 2>/dev/null | head -n1 || true)"
+    if [ -z "$win" ]; then
+      win="$(xdotool search --onlyvisible --name 'BlastEm' 2>/dev/null | head -n1 || true)"
+    fi
     [ -n "$win" ] && break
     sleep 0.1
   done
-  test -n "$win"
+  if [ -z "$win" ]; then
+    echo "$name: could not resolve BlastEm window for PID $EMU_PID" >&2
+    xdotool search --onlyvisible --name '.*' getwindowname %@ 2>&1 | tee "$out/window_search.log" >&2 || true
+    cat "$out/blastem.log" >&2 || true
+    return 1
+  fi
+  echo "emu_pid=$EMU_PID window=$win" > "$out/window_search.log"
+  xdotool getwindowname "$win" >> "$out/window_search.log" 2>&1 || true
   xdotool windowfocus "$win" || true
   : > "$out/trace.csv"
   echo 'label,epoch_ms' >> "$out/trace.csv"
@@ -80,14 +94,24 @@ PY
   down() { xdotool keydown --window "$win" "$1"; }
   up() { xdotool keyup --window "$win" "$1"; }
   capture() {
-    local label="$1" ts newest
+    local label="$1" ts before newest_line newest
     ts="$(date +%s%3N)"
+    before="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 || true)"
     shot_key
-    sleep 0.09
-    newest="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
-    test -n "$newest"
-    cp "$newest" "$out/${label}.png"
-    echo "$label,$ts" >> "$out/trace.csv"
+    newest_line=''
+    for _ in $(seq 1 40); do
+      newest_line="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 || true)"
+      if [ -n "$newest_line" ] && [ "$newest_line" != "$before" ]; then
+        newest="${newest_line#* }"
+        cp "$newest" "$out/${label}.png"
+        echo "$label,$ts" >> "$out/trace.csv"
+        return 0
+      fi
+      sleep 0.05
+    done
+    echo "$name: screenshot timeout for $label" >&2
+    find "$raw" -maxdepth 1 -type f -printf '%T@ %p\n' | sort -nr >&2 || true
+    return 1
   }
 
   sleep 1.5
