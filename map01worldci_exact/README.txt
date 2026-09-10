@@ -1,0 +1,1 @@
+Exact verified transport fragments for Map01 Z01 WORLD_ART overlay. Files are concatenated lexically and decoded as Base64; final tar.gz SHA-256 must be 42ffe0414dc8bf36894d459211bf5fe082fa7edbde2983bd3ee933f01ede8bec.
