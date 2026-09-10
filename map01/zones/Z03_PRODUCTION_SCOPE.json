@@ -1,0 +1,26 @@
+{
+  "zone_id": "Z03",
+  "name_ru": "Северный водопад, верхняя река и северный мост",
+  "master_size_px": [1536, 1152],
+  "crop_bounds_px": [384, 0, 1152, 512],
+  "crop_size_px": [768, 512],
+  "sector_size_px": [128, 128],
+  "sector_grid_span": [6, 4],
+  "sector_count": 24,
+  "crop_file_sha256": "a38381ea9a7952a9547977e244d64525d1b0e0b2b7f7607a8db088d1562c9d2f",
+  "crop_pixel_sha256": "fad80476eacdff822493cc5a082d61338b07e49453b82953d993f7741ba7ad27",
+  "pixel_identical_to_approved_master_crop": true,
+  "rescaled": false,
+  "regenerated": false,
+  "procedural_geography": false,
+  "contains": [
+    "северный водопад",
+    "верхний участок реки",
+    "острова русла",
+    "северный деревянный мост",
+    "подход главной дороги со стороны Z01",
+    "лесные и скальные берега"
+  ],
+  "overlap_policy": "Нижняя часть захватывает Z01 для непрерывности реки, дороги и северного моста. Общие логические клетки при разметке Z03 должны наследоваться из уже авторитетной Z01, а не размечаться заново.",
+  "next_step": "MANUAL_TERRAIN_COLLISION_AUTHORING"
+}
