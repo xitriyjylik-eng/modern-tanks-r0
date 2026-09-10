@@ -104,26 +104,33 @@ Static map повторно PASS:
 - встроенный `verify_r3_static_map.py`: PASS;
 - встроенный `verify_rom.py` на финальном ROM: PASS_WITH_WARNINGS, errors `[]`.
 
-В полном архиве находятся:
-- `R3_FINAL_CANDIDATE_BUILD/Modern_Tanks_R3_CANDIDATE.bin`;
-- финальные build/audit/hash/toolchain reports;
-- `R3_RUNTIME_EVIDENCE/` с combined NTSC/PAL camera и HUD reports;
-- полный BlastEm evidence ZIP;
-- обновлённый `PROJECT_SOURCE/sgdk/src/main.c` с SHA-256 `0eb6593357d6b42c002ad9d0c457a156b3b5908048db118b1c227543fb641bcc`;
-- статические map/HUD resources;
-- обновлённые runtime verification tools;
-- `R3_STAGE9_FINAL_REGRESSION_REPORT.md` и acceptance docs.
-
 **Итог Этапа 9: финальный R3-кандидат технически готов к пользовательской приёмке. R3 пока НЕ ACCEPTED/CLOSED.**
 
-## Следующий шаг при команде «Продолжай»
+## Этап 10 — финальная soak-приёмка: В ПРОЦЕССЕ
 
-Начать только **Этап 10 — финальная пользовательская/soak-приёмка**:
-1. не менять игровую графику или camera logic без найденного дефекта;
-2. при необходимости выполнить более длительный emulator soak (10+ минут) и многократные MENU -> BATTLE -> MENU циклы на финальном ROM;
-3. пользователь запускает выданный ROM у себя и оценивает внешний вид карты, загрузку и ощущение камеры;
-4. если пользователь сообщает дефект — зафиксировать его и исправлять отдельным новым кандидатом;
-5. только после явного подтверждения пользователя можно помечать R3 `ACCEPTED/CLOSED` и рассматривать перенос в `main`.
+Созданы отдельные инструменты долгого реального эмуляторного теста:
+- `sgdk/tools/run_r3_stage10_soak.sh`, commit `36f2daf0d7c5403a6bd4a50b98b6be4ee88af0e8`;
+- `sgdk/tools/analyze_r3_stage10_soak.py`, commit `90f6cc0fd5dc44c3e7c71f234c4afb9239678bac`;
+- workflow `.github/workflows/r3-stage10-soak.yml`, commit `373b40117160db8777ee373c5e56ae2d01b28af1`.
+
+Текущий GitHub Actions run:
+- workflow: `R3 Stage 10 Long Emulator Soak`;
+- run id: `34435644570`, run #1;
+- job id: `102740016693`;
+- tested head: `373b40117160db8777ee373c5e56ae2d01b28af1`;
+- перед soak уже PASS: static overlay restore, static-map verify, SGDK build и жёсткая проверка SHA финального ROM `94285501cd6cb72e909c31676a52c14da01f8e72b960e34636689768e13ed293`;
+- на момент checkpoint выполняется шаг `Run 10+ minute real-emulator soak`.
+
+Сценарий:
+- NTSC: минимум `630` секунд непрерывного BlastEm runtime и минимум `40` циклов MENU -> BATTLE -> движение -> MENU;
+- PAL: дополнительная повторная регрессия минимум `120` секунд и минимум `8` циклов;
+- каждый цикл проверяет, что BlastEm жив, делает battle/moved/menu screenshots и логирует elapsed/RSS;
+- analyzer требует корректный возврат в меню, стабильный reset battle state, видимое движение карты и отсутствие чёрных/повреждённых кадров;
+- host BlastEm RSS записывается только как диагностический показатель и не выдаётся за прямое измерение Mega Drive heap.
+
+## Следующая точка
+
+Дождаться завершения run `34435644570`. Если soak/analyzer PASS — скачать artifact, зафиксировать точные длительности/число циклов/метрики и закрыть технический Этап 10. Если FAIL — разобрать только первый реальный дефект либо дефект harness, исправить и повторить Stage 10.
 
 ## Правило
 
