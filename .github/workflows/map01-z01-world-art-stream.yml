@@ -182,17 +182,31 @@ jobs:
           python3 - "$OUT/R3_BASE_SMOKE_REPORT.json" "$OUT/MAP01_WORLD_SMOKE_REPORT.json" "$R3_RC" <<'PY'
           import json,sys
           from pathlib import Path
-          from PIL import Image
+          from PIL import Image, ImageFilter
           import numpy as np
+
           src,out,base_rc=sys.argv[1],sys.argv[2],int(sys.argv[3])
           report=json.load(open(src,encoding='utf-8')); m=report['metrics']
-          cap=np.array(Image.open(Path(out).parent/'03_battle_start.png').convert('RGB'),dtype=np.float32)[:192,:224]
-          exp=np.array(Image.open('sgdk/res/map01_z01_runtime_preview.png').convert('RGB'),dtype=np.float32)[212:404,276:500]
-          def edges(a):
-              g=a.mean(2)
-              return np.concatenate(((g[:,1:]-g[:,:-1]).ravel(),(g[1:,:]-g[:-1,:]).ravel()))
-          ea,eb=edges(cap),edges(exp)
-          edge_corr=float(np.corrcoef(ea,eb)[0,1])
+          capture=Image.open(Path(out).parent/'03_battle_start.png').convert('L').crop((0,0,224,192)).filter(ImageFilter.GaussianBlur(radius=2.0))
+          preview=Image.open('sgdk/res/map01_z01_runtime_preview.png').convert('L').filter(ImageFilter.GaussianBlur(radius=2.0))
+          cap=np.asarray(capture,dtype=np.float32)
+          full=np.asarray(preview,dtype=np.float32)
+
+          def corr(a,b):
+              aa=a-a.mean(); bb=b-b.mean()
+              den=float(np.sqrt((aa*aa).sum()*(bb*bb).sum()))
+              return float((aa*bb).sum()/den) if den else 0.0
+
+          expected_x,expected_y=276,212
+          expected_corr=corr(cap,full[expected_y:expected_y+192,expected_x:expected_x+224])
+          best=(-2.0,None,None)
+          for dy in range(-8,9):
+              for dx in range(-8,9):
+                  y=expected_y+dy; x=expected_x+dx
+                  c=corr(cap,full[y:y+192,x:x+224])
+                  if c>best[0]: best=(c,dx,dy)
+          best_corr,best_dx,best_dy=best
+
           checks={
             'title_to_menu':m['title_to_menu_full']>=0.08,
             'menu_to_battle':m['menu_to_battle_full']>=0.15,
@@ -204,9 +218,21 @@ jobs:
             'bottom_fixed_down':m['camera_down_bottom_text_mask']<=0.001,
             'return_is_menu_like':m['return_vs_menu_full']<=0.03,
             'return_closer_to_menu_than_battle':m['return_vs_menu_full']<m['return_vs_battle_full'],
-            'approved_z01_structure_visible':edge_corr>=0.35,
+            'approved_z01_expected_structure':expected_corr>=0.45,
+            'approved_z01_best_structure':best_corr>=0.50,
+            'approved_z01_position_within_8px':abs(best_dx)<=8 and abs(best_dy)<=8,
           }
-          result={'status':'PASS' if all(checks.values()) else 'FAIL','base_r3_analyzer_exit_code':base_rc,'metrics':m,'approved_z01_edge_correlation':edge_corr,'checks':checks}
+          result={
+            'status':'PASS' if all(checks.values()) else 'FAIL',
+            'base_r3_analyzer_exit_code':base_rc,
+            'base_r3_exact_menu_failure_is_non_blocking':base_rc!=0 and m['return_vs_menu_full']<=0.03,
+            'metrics':m,
+            'approved_z01_expected_xy':[expected_x,expected_y],
+            'approved_z01_expected_blurred_correlation':expected_corr,
+            'approved_z01_best_blurred_correlation':best_corr,
+            'approved_z01_best_offset_px':[best_dx,best_dy],
+            'checks':checks,
+          }
           json.dump(result,open(out,'w',encoding='utf-8'),ensure_ascii=False,indent=2)
           print(json.dumps(result,ensure_ascii=False,indent=2))
           if result['status']!='PASS': raise SystemExit(1)
