@@ -26,24 +26,28 @@
 
 Экспериментальные fuzzy/скриншотные CI-gates не являются отдельным этапом разработки. Возвращаться к ним только при реальной регрессии.
 
-## Z03 — северный водопад — OBJECTS/EVENTS ВЫПОЛНЕНО
+## Z03 — северный водопад — SPAWN/RUNTIME ВЫПОЛНЕНО
 - production crop: master bounds `[384,0,1152,512]`;
 - размер crop: 768×512;
 - 24 сектора 128×128;
 - WORLD_ART: точный crop утверждённого master;
 - TERRAIN: 96×64 = 6144 ячеек;
 - COLLISION: 96×64 = 6144 ячеек;
-- overlap с Z01: 2560 ячеек каждого слоя унаследованы cell-for-cell;
-- TERRAIN/COLLISION validation: PASS;
-- OBJECTS: 10;
-- EVENTS: 8;
-- object/event sector indices: 24;
-- event→object ссылки и границы проверены;
-- переходы: Z03→Z01, Z03→Z02, Z03→Z04, северный RESERVED REGION_2;
-- OBJECTS/EVENTS validation: PASS, errors=0, warnings=0.
+- overlap с Z01: 2560 ячеек каждого слоя унаследованы cell-for-cell — PASS;
+- северный мост и bridge-event дедуплицированы: единственный owner — Z01;
+- owned OBJECTS Z03: 8 + 1 shared Z01 bridge ref;
+- owned EVENTS Z03: 7 + 1 shared Z01 bridge-event ref;
+- восточный переход Z03→Z04 исправлен по фактической дороге;
+- южный переход Z03→Z01 перенесён к реальному переходному коридору;
+- SPAWN: 12 = 3 ZONE_ENTRY + 3 NPC + 2 VEHICLE + 2 ENEMY + 2 EFFECT;
+- второй активный PLAYER_START отсутствует;
+- `map01_z03_data.c/.h` созданы;
+- общий terrain/collision router Z01+Z03 создан;
+- host C syntax `-Wall -Wextra -Werror`: PASS;
+- validation: PASS, errors=0, warnings=0.
 
 ### Следующее действие
-Z03 `SPAWN + runtime`. После этого — одна интеграционная проверка Z03 и переход к следующему связанному участку.
+**Одна интеграционная проверка Z01↔Z03:** общий runtime, переход камеры, overlap/seam и отсутствие двойного bridge object/event. После PASS — сразу следующая связанная зона.
 
 ## Правило против зацикливания
 Каждый участок проходит конечный конвейер: `WORLD_ART scope → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → интеграционная проверка → следующий участок`. CI — средство проверки, а не самостоятельная цель.
