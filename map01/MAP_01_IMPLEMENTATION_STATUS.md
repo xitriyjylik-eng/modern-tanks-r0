@@ -35,9 +35,20 @@
 - host C syntax `-Wall -Wextra -Werror`: PASS;
 - Z01↔Z03 integration check: PASS — routing, overlap, seam data, bridge ownership и transition anchors проверены.
 
+## Z02 — северо-западные руины
+- WORLD_ART scope: **DONE V1**;
+- production crop: `[0,0,640,512]`, 640×512;
+- 20 технических секторов 128×128;
+- crop pixel-identical утверждённому master: PASS;
+- масштабирование: нет;
+- новая генерация: нет;
+- процедурная география: нет;
+- восточный край намеренно перекрывает стык с готовыми Z03/Z01;
+- следующий шаг: **ручная TERRAIN + COLLISION разметка Z02**.
+
 ## Текущий следующий шаг
-**Z02 — Северо-западные руины: WORLD_ART scope.**
-После него: `TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → integration check`, затем следующая зона.
+**Z02 — TERRAIN/COLLISION manual authoring.**
+После него: `OBJECTS/EVENTS → SPAWN/runtime → integration check`, затем следующая связанная зона.
 
 ## Правило против зацикливания
 Каждый участок проходит конечный конвейер один раз. Повторные CI/BlastEm-прогоны выполняются только при реальной регрессии либо пакетно после нескольких связанных зон. CI — средство проверки, а не самостоятельная цель.
