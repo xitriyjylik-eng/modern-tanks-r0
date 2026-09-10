@@ -14,42 +14,32 @@
 - старый план 4096×3072 / 192 сектора отменён;
 - старый художественный R3 background не является целевой картой; используется только проверенная техническая база камеры/рендера.
 
-## Z01 — центральная деревня — ВЫПОЛНЕНО ДО ТЕХНИЧЕСКОГО PROOF
-- WORLD_ART;
-- TERRAIN + COLLISION;
-- OBJECTS + EVENTS;
-- SPAWN;
-- runtime loader и battle-state integration;
-- потоковый вывод нового WORLD_ART;
-- SGDK 2.11 build: ROM 393216 bytes, SHA-256 `6dca7090feb2dce2e4a1d68d8c6cac84fc59ce0f08db00d22acaef2964ebc144`;
-- BlastEm NTSC подтвердил вход в бой, движение камеры, неподвижный HUD/нижнюю панель и возврат к меню.
+## Z01 — центральная деревня
+- WORLD_ART: DONE;
+- TERRAIN + COLLISION: DONE;
+- OBJECTS + EVENTS: DONE;
+- SPAWN/runtime: DONE;
+- потоковый вывод WORLD_ART и SGDK/BlastEm technical proof: DONE;
+- финальная пользовательская приёмка как части всей карты: PENDING.
 
-Экспериментальные fuzzy/скриншотные CI-gates не являются отдельным этапом разработки. Возвращаться к ним только при реальной регрессии.
-
-## Z03 — северный водопад — SPAWN/RUNTIME ВЫПОЛНЕНО
-- production crop: master bounds `[384,0,1152,512]`;
-- размер crop: 768×512;
+## Z03 — северный водопад — ПОЛНЫЙ КОНВЕЙЕР ЗОНЫ ЗАВЕРШЁН
+- production crop: `[384,0,1152,512]`, 768×512;
 - 24 сектора 128×128;
-- WORLD_ART: точный crop утверждённого master;
-- TERRAIN: 96×64 = 6144 ячеек;
-- COLLISION: 96×64 = 6144 ячеек;
-- overlap с Z01: 2560 ячеек каждого слоя унаследованы cell-for-cell — PASS;
-- северный мост и bridge-event дедуплицированы: единственный owner — Z01;
-- owned OBJECTS Z03: 8 + 1 shared Z01 bridge ref;
-- owned EVENTS Z03: 7 + 1 shared Z01 bridge-event ref;
-- восточный переход Z03→Z04 исправлен по фактической дороге;
-- южный переход Z03→Z01 перенесён к реальному переходному коридору;
-- SPAWN: 12 = 3 ZONE_ENTRY + 3 NPC + 2 VEHICLE + 2 ENEMY + 2 EFFECT;
-- второй активный PLAYER_START отсутствует;
-- `map01_z03_data.c/.h` созданы;
-- общий terrain/collision router Z01+Z03 создан;
+- WORLD_ART: DONE;
+- TERRAIN/COLLISION: DONE, 6144+6144 ячеек;
+- overlap с Z01: 2560 ячеек каждого слоя cell-for-cell PASS;
+- OBJECTS/EVENTS: DONE;
+- SPAWN/runtime: DONE, 12 spawn points, второго PLAYER_START нет;
+- северный мост и bridge-event имеют одного owner Z01;
+- общий runtime router Z01+Z03: DONE;
 - host C syntax `-Wall -Wextra -Werror`: PASS;
-- validation: PASS, errors=0, warnings=0.
+- Z01↔Z03 integration check: PASS — routing, overlap, seam data, bridge ownership и transition anchors проверены.
 
-### Следующее действие
-**Одна интеграционная проверка Z01↔Z03:** общий runtime, переход камеры, overlap/seam и отсутствие двойного bridge object/event. После PASS — сразу следующая связанная зона.
+## Текущий следующий шаг
+**Z02 — Северо-западные руины: WORLD_ART scope.**
+После него: `TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → integration check`, затем следующая зона.
 
 ## Правило против зацикливания
-Каждый участок проходит конечный конвейер: `WORLD_ART scope → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → интеграционная проверка → следующий участок`. CI — средство проверки, а не самостоятельная цель.
+Каждый участок проходит конечный конвейер один раз. Повторные CI/BlastEm-прогоны выполняются только при реальной регрессии либо пакетно после нескольких связанных зон. CI — средство проверки, а не самостоятельная цель.
 
 `main` не изменять/не сливать до явной пользовательской приёмки новой карты и R3.
