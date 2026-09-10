@@ -1,68 +1,47 @@
 # Modern Tanks — CURRENT STATUS / READ FIRST
 
-Дата фиксации: 2026-09-09
+Дата фиксации: 2026-09-10.
 
-Это главный статусный файл проекта. Если старые документы противоречат этому файлу по состоянию этапов, приоритет у этого файла и `plan/PROJECT_PROGRESS_ACCEPTED_R2.md`.
+Это главный статусный файл текущей рабочей ветки. Если старые документы противоречат ему по текущему состоянию R3/Map 01, приоритет у этого файла, `R3_WORK_CHECKPOINT.md` и `R3_MAP01_PRODUCTION_PIPELINE.md`.
 
-## Принятая контрольная точка
-
+## Принятая база
+- R0 / R1 / R2: **ACCEPTED / CLOSED**.
 - Платформа: Sega Mega Drive / Genesis.
 - SDK: SGDK 2.11.
 - Нативный экран: 320×224.
-- Основной путь управления: 3-button controller.
-- Репозиторий: `xitriyjylik-eng/modern-tanks-r0`.
-- Принятый игровой baseline R2: commit `a1faa7d567ceb7f5506005b354da28f5c1ea0cee`.
-- Финальный проверочный CI run R2: `34255626880` — SUCCESS.
-- Принятый ROM SHA-256: `fb6896471a1bf559e13c55118c3d2beedf8c1567ff6703a114ef05857b744017`.
-- Размер ROM: 131072 bytes.
-- ROM audit: PASS.
-- Владелец проекта проверил финальный R2 в целевом эмуляторе и явно подтвердил: «Супер, засчитываю».
+- Принятый R2 baseline commit: `a1faa7d567ceb7f5506005b354da28f5c1ea0cee`.
+- Принятый R2 ROM SHA-256: `fb6896471a1bf559e13c55118c3d2beedf8c1567ff6703a114ef05857b744017`.
+- `main` не изменять до явной пользовательской приёмки R3.
 
-## Состояние этапов
+## R3 — текущий статус
+R3: **IN PROGRESS / MAP 01 PRODUCTION / NOT ACCEPTED**.
 
-| Этап | Статус | Результат |
-|---|---|---|
-| R0 Hardware Probe | ACCEPTED / CLOSED | Базовый Mega Drive/SGDK runtime и фактическая проверка на целевом эмуляторе |
-| R1 Core / State Machine | ACCEPTED / CLOSED | BOOT, TITLE, MAIN_MENU, TEST_BATTLE shell, GARAGE shell, переходы, input, NTSC/PAL timing, bank lifecycle, error layer |
-| R2 Main Menu Visual / Ambient | ACCEPTED / CLOSED | Финальное главное меню, принятый фон, палитра и окружающие анимации |
-| R3 Battle Renderer / HUD | NEXT / UNBLOCKED / NOT STARTED | Следующий этап реализации |
-| R4 Tank Art / Player Classes | PENDING | После R3 |
-| R5 Region 1 / World Foundation | PENDING | После R4 |
-| R6 Combat / Enemies / Mission Vertical Slice | PENDING | После R5 |
-| R7 Regions 2–5 | PENDING | После vertical slice |
-| R8 Bosses / Effects / Weather | PENDING | Далее по master plan |
-| R9 Meta Systems | PENDING | Кампания, гараж, апгрейды, статистика, options/results |
-| R10 SRAM | PENDING | 3 профиля, A/B copies, checksum/recovery |
-| R11 Audio | PENDING | XGM2/YM2612 + PSG/PCM |
-| R12 QA / Release Candidate | PENDING | Emulator matrix, NTSC/PAL, reset/save/audio/checksum |
+Старый R3-кандидат 1024×768 технически доказал renderer/HUD/smooth camera/MAP lifecycle и прошёл BlastEm NTSC/PAL + soak, но его художественная карта отклонена. Она остаётся только техническим testbed и не является целевым WORLD_ART.
 
-## Что именно принято в R2
+## Главная цель R3
+Довести большую цельную Map 01 по утверждённому визуальному эталону до рабочего игрового состояния: ручной WORLD_ART, TERRAIN/COLLISION, OBJECTS/EVENTS, SPAWN/runtime, потоковая подгрузка, плавная камера и финальная проверка без долгой загрузки.
 
-Главное меню, его шрифт, компоновка, рамки, селектор, общий ландшафт и цветовая гамма считаются зафиксированными. Правая мини-карта удалена. Общая детализация и качество фона приняты и не должны ухудшаться при последующих этапах.
+## Актуальная Map 01
+- authoritative WORLD_ART master: 1536×1152;
+- масштабирование/regeneration: нет;
+- sector grid: 12×9 = 108 секторов 128×128;
+- старый план 4096×3072 / 192 сектора отменён;
+- procedural geography запрещена;
+- визуальное качество нельзя ухудшать ради tile-dedup/ROM norms.
 
-Окружающая анимация финального R2:
+## Прогресс
+- Z01: WORLD_ART + TERRAIN/COLLISION + OBJECTS/EVENTS + SPAWN/runtime + отдельный SGDK/BlastEm proof — DONE.
+- Z03 WORLD_ART scope 768×512 — DONE.
+- Z03 TERRAIN/COLLISION 96×64 — DONE V2, validation PASS.
+- Z03 overlap с Z01: 2560 cells/layer inherited cell-for-cell — PASS.
+- Следующий этап: **Z03 OBJECTS + EVENTS**.
 
-- река — 12 кадров, медленное течение по локальному направлению русла;
-- берег, дома и мост исключены из маски воды;
-- правый флаг — 12 плавных кадров на существующем флагштоке;
-- левого флага нет;
-- верхний огонь — 8 кадров, статичный дубликат пламени убран из фона;
-- нижний огонь — независимые 8 кадров, статичный дубликат также убран;
-- деревья — лёгкое 12-кадровое движение периферии крон;
-- вода, огонь, флаг и листва используют существующие цветовые категории сцены и не должны визуально выбиваться яркостью;
-- отдельные анимации имеют собственные таймеры;
-- R1 core сохранён.
+## Конечный маршрут R3
+`эталон/география → structure → WORLD_ART → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → full integration → camera/streaming/latency → NTSC/PAL + soak → user acceptance`.
 
-## CI и воспроизводимость
+CI/fuzzy/screenshot metrics — средства диагностики, не самостоятельные этапы.
 
-Финальный R2 проходит генерацию/проверку ресурсов, VRAM budget guard, две независимые сборки SGDK 2.11, byte-for-byte сравнение ROM и ROM audit. Принятый baseline не следует менять при подготовке R3, кроме осознанных изменений, относящихся к новому этапу.
-
-## Что делать дальше
-
-Начинать R3. Не возвращаться к редизайну принятого R2 без прямого запроса владельца.
-
-R3 должен использовать `references/COMBAT_REFERENCE.png` как визуальный ориентир боя, при этом три locked reference PNG нельзя изменять, перекодировать или заменять. Granada остаётся только техническим ориентиром Mega Drive/VDP/resource discipline и не является донором кода, ассетов, карт, музыки или правил игры.
-
-Подробный R3 scope: `plan/NEXT_R3_SCOPE.md`.
-Подробная фиксация прогресса: `plan/PROJECT_PROGRESS_ACCEPTED_R2.md`.
-Финальная приёмка R2: `R2_ACCEPTANCE_FINAL.md`.
+Подробнее:
+- `R3_WORK_CHECKPOINT.md`;
+- `R3_MAP01_PRODUCTION_PIPELINE.md`;
+- `map01/MAP_01_IMPLEMENTATION_STATUS.md`.
