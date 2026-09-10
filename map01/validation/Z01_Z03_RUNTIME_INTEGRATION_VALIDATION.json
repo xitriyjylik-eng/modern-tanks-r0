@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "scope": "Z01<->Z03 local runtime integration",
+  "checks": {
+    "z03_only_routing": true,
+    "z01_z03_overlap_mask": true,
+    "overlap_terrain_equal": true,
+    "overlap_collision_equal": true,
+    "z01_only_routing": true,
+    "outside_authored_world_is_blocked": true,
+    "canonical_north_bridge_is_bridge_free": true,
+    "z03_has_no_duplicate_bridge_object": true,
+    "z03_has_no_duplicate_bridge_event": true,
+    "z03_has_no_second_player_start": true,
+    "z03_zone_entry_anchor_count_is_3": true,
+    "runtime_data_present_across_z01_z03_seam": true
+  },
+  "counts": {
+    "z01_objects": 13,
+    "z01_events": 9,
+    "z01_spawns": 12,
+    "z03_owned_objects": 8,
+    "z03_owned_events": 7,
+    "z03_spawns": 12
+  },
+  "test_method": "host-compiled C integration harness against map01_runtime.c plus Z01/Z03 generated data",
+  "compiler_flags": "-std=gnu11 -Wall -Wextra -Werror",
+  "next_r3_step": "Z02_WORLD_ART_SCOPE"
+}
