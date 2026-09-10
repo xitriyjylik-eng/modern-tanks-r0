@@ -7,6 +7,7 @@ on:
       - r3-map-camera
     paths:
       - '.github/workflows/r3-runtime-smoke.yml'
+      - 'sgdk/tools/analyze_r3_runtime_smoke.py'
 
 jobs:
   runtime-smoke:
@@ -196,60 +197,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image
-          import json
-
-          root=Path('sgdk/out/runtime_smoke')
-          names=['01_title','02_menu','03_battle_start','04_battle_right','05_battle_down','06_menu_return']
-          im={n:Image.open(root/f'{n}.png').convert('RGB') for n in names}
-          sizes={n:list(v.size) for n,v in im.items()}
-          if any(v.size != (320,224) for v in im.values()):
-              raise SystemExit(f'unexpected screenshot sizes: {sizes}')
-
-          def diff_ratio(a,b,box=None):
-              if box:
-                  a=a.crop(box); b=b.crop(box)
-              pa=list(a.getdata()); pb=list(b.getdata())
-              return sum(x!=y for x,y in zip(pa,pb))/len(pa)
-
-          field=(0,0,224,192)
-          right_hud=(224,0,320,192)
-          bottom=(0,192,320,224)
-          full=(0,0,320,224)
-
-          metrics={
-              'title_to_menu_full':diff_ratio(im['01_title'],im['02_menu'],full),
-              'menu_to_battle_full':diff_ratio(im['02_menu'],im['03_battle_start'],full),
-              'camera_right_field':diff_ratio(im['03_battle_start'],im['04_battle_right'],field),
-              'camera_right_hud':diff_ratio(im['03_battle_start'],im['04_battle_right'],right_hud),
-              'camera_right_bottom':diff_ratio(im['03_battle_start'],im['04_battle_right'],bottom),
-              'camera_down_field':diff_ratio(im['04_battle_right'],im['05_battle_down'],field),
-              'camera_down_hud':diff_ratio(im['04_battle_right'],im['05_battle_down'],right_hud),
-              'camera_down_bottom':diff_ratio(im['04_battle_right'],im['05_battle_down'],bottom),
-              'return_vs_menu_full':diff_ratio(im['06_menu_return'],im['02_menu'],full),
-              'return_vs_battle_full':diff_ratio(im['06_menu_return'],im['05_battle_down'],full),
-          }
-
-          failures=[]
-          if metrics['title_to_menu_full'] < 0.08: failures.append('TITLE->MENU did not visibly transition')
-          if metrics['menu_to_battle_full'] < 0.15: failures.append('MENU->BATTLE did not visibly transition')
-          if metrics['camera_right_field'] < 0.08: failures.append('RIGHT hold did not visibly move battlefield')
-          if metrics['camera_down_field'] < 0.08: failures.append('DOWN hold did not visibly move battlefield')
-          if metrics['camera_right_hud'] > 0.20: failures.append('right HUD changed too much during RIGHT camera move')
-          if metrics['camera_down_hud'] > 0.20: failures.append('right HUD changed too much during DOWN camera move')
-          if metrics['camera_right_bottom'] > 0.12: failures.append('bottom log changed too much during RIGHT camera move')
-          if metrics['camera_down_bottom'] > 0.12: failures.append('bottom log changed too much during DOWN camera move')
-          if metrics['return_vs_menu_full'] >= metrics['return_vs_battle_full']:
-              failures.append('B button did not return screen closer to menu than battle')
-
-          report={'emulator':'BlastEm Ubuntu package','region':'U/NTSC','screenshot_sizes':sizes,'metrics':metrics,
-                  'status':'PASS' if not failures else 'FAIL','failures':failures}
-          (root/'R3_RUNTIME_SMOKE_REPORT.json').write_text(json.dumps(report,indent=2)+'\n')
-          print(json.dumps(report,indent=2))
-          if failures: raise SystemExit(1)
-          PY
+          python3 sgdk/tools/analyze_r3_runtime_smoke.py
 
       - name: Publish runtime smoke evidence
         if: always()
