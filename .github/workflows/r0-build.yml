@@ -26,6 +26,40 @@ jobs:
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
 
+      - name: Verify static transport chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('sgdk/r3ci')
+          expected={
+            0:'88bb1acbdba9f946338d3cb7313ae5629b4d1c7bb38efa8e6fd98afe0101b293',
+            1:'39a455119ee853299e957f1082a931c2d873952fc6840c3f8a48f65dcc2f2868',
+            2:'6b6456e097b5173cc68a03f2221dd33f07d09a94f35af454924d00c6ed14c4e8',
+            3:'4b7559e86a513c59e5a572e3c5e0118d3372fbca243ec32cc18d43d749d7cda5',
+            4:'bbdde87db66c04d2983b67949f8357400affa1a5e5ca8b5718ef11a90cd9d3ee',
+            5:'06aa0243144b644515d82de32a091b5d21fb1031a072a41d3c90119256bd7dce',
+          }
+          def sha(s): return hashlib.sha256(s.encode('ascii')).hexdigest()
+          for i,want in expected.items():
+              p=root/f'world.{i:02d}.b64'
+              s=p.read_text(encoding='ascii').strip()
+              if sha(s)!=want and i==4 and len(s)==8001:
+                  hits=[]
+                  for j in range(len(s)):
+                      t=s[:j]+s[j+1:]
+                      if sha(t)==want:
+                          hits.append((j,t))
+                  assert len(hits)==1, ('world04_repair_candidates',len(hits),sha(s),len(s))
+                  j,s=hits[0]
+                  p.write_text(s,encoding='ascii')
+                  print('normalized world.04 transport at char',j)
+              assert sha(s)==want,(i,len(s),sha(s),want)
+          print('R3 static transport chunk hashes PASS')
+          PY
+
       - name: Restore static authored R3 overlay
         shell: bash
         run: |
