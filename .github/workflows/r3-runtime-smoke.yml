@@ -1,0 +1,255 @@
+name: R3 Runtime Emulator Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r3-map-camera
+    paths:
+      - '.github/workflows/r3-runtime-smoke.yml'
+
+jobs:
+  runtime-smoke:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and emulator tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool
+
+      - name: Restore static R3 source and art
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('sgdk/r3ci')
+          expected={
+            0:'88bb1acbdba9f946338d3cb7313ae5629b4d1c7bb38efa8e6fd98afe0101b293',
+            1:'39a455119ee853299e957f1082a931c2d873952fc6840c3f8a48f65dcc2f2868',
+            2:'6b6456e097b5173cc68a03f2221dd33f07d09a94f35af454924d00c6ed14c4e8',
+            3:'4b7559e86a513c59e5a572e3c5e0118d3372fbca243ec32cc18d43d749d7cda5',
+            4:'bbdde87db66c04d2983b67949f8357400affa1a5e5ca8b5718ef11a90cd9d3ee',
+            5:'06aa0243144b644515d82de32a091b5d21fb1031a072a41d3c90119256bd7dce',
+          }
+          def sha(s): return hashlib.sha256(s.encode('ascii')).hexdigest()
+          for i,want in expected.items():
+              p=root/f'world.{i:02d}.b64'
+              s=p.read_text(encoding='ascii').strip()
+              if sha(s)!=want and i==4 and len(s)==8001:
+                  hits=[]
+                  for j in range(len(s)):
+                      t=s[:j]+s[j+1:]
+                      if sha(t)==want: hits.append((j,t))
+                  assert len(hits)==1
+                  _,s=hits[0]
+                  p.write_text(s,encoding='ascii')
+              assert sha(s)==want,(i,len(s),sha(s),want)
+          PY
+          python3 sgdk/tools/r3_ci_overlay_small.py restore
+          python3 sgdk/tools/r3_ci_overlay_small.py verify
+          python3 sgdk/tools/build_refined_animation_assets.py >/tmp/r3_ambient.log
+
+      - name: Build R3 ROM with SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE" >/tmp/r3_docker_pull.log
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          chmod -R a+rwX sgdk
+          docker run --rm -v "$PWD/sgdk:/m68k" "$ID"
+          test -f sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R3_RUNTIME_ROM_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R3_RUNTIME_ROM_AUDIT.json
+
+      - name: Boot and drive ROM in BlastEm
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$PWD/sgdk/out/runtime_smoke"
+          RAW="$RUNNER_TEMP/r3-blastem-shots"
+          HOME_DIR="$RUNNER_TEMP/r3-blastem-home"
+          mkdir -p "$OUT" "$RAW" "$HOME_DIR/.config/blastem"
+
+          CFG_SRC="$(dpkg -L blastem | grep -E '/default\.cfg$' | head -n1 || true)"
+          if [ -n "$CFG_SRC" ]; then
+            cp "$CFG_SRC" "$HOME_DIR/.config/blastem/blastem.cfg"
+          else
+            printf 'ui {\n screenshot_path %s\n screenshot_template r3_%%Y%%m%%d_%%H%%M%%S.png\n}\n' "$RAW" > "$HOME_DIR/.config/blastem/blastem.cfg"
+          fi
+          python3 - "$HOME_DIR/.config/blastem/blastem.cfg" "$RAW" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]); raw=sys.argv[2]
+          s=p.read_text(errors='replace')
+          if re.search(r'(?m)^\s*screenshot_path\s+',s):
+              s=re.sub(r'(?m)^\s*screenshot_path\s+.*$',f'\tscreenshot_path {raw}',s)
+          else:
+              s=s.replace('ui {',f'ui {{\n\tscreenshot_path {raw}',1)
+          if re.search(r'(?m)^\s*screenshot_template\s+',s):
+              s=re.sub(r'(?m)^\s*screenshot_template\s+.*$',r'\tscreenshot_template r3_%Y%m%d_%H%M%S.png',s)
+          else:
+              s=s.replace('ui {','ui {\n\tscreenshot_template r3_%Y%m%d_%H%M%S.png',1)
+          p.write_text(s)
+          PY
+
+          export HOME="$HOME_DIR"
+          export DISPLAY=:99
+          export SDL_AUDIODRIVER=dummy
+          export LIBGL_ALWAYS_SOFTWARE=1
+          Xvfb :99 -screen 0 640x480x24 -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
+          XVFB_PID=$!
+          trap 'kill ${EMU_PID:-0} ${XVFB_PID:-0} 2>/dev/null || true' EXIT
+          sleep 1
+
+          blastem -g -r U sgdk/out/rom.bin 320 224 >"$OUT/blastem.log" 2>&1 &
+          EMU_PID=$!
+
+          WIN=''
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$EMU_PID" 2>/dev/null; then
+              echo 'BlastEm exited before creating a window' >&2
+              cat "$OUT/blastem.log" >&2 || true
+              exit 1
+            fi
+            WIN="$(xdotool search --onlyvisible --name 'BlastEm' 2>/dev/null | head -n1 || true)"
+            [ -n "$WIN" ] && break
+            sleep 0.1
+          done
+          test -n "$WIN"
+          xdotool windowfocus "$WIN" || true
+
+          tap_key() {
+            local key="$1"
+            xdotool keydown --window "$WIN" "$key"
+            sleep 0.20
+            xdotool keyup --window "$WIN" "$key"
+          }
+          take_shot() {
+            local label="$1"
+            sleep 1.10
+            local before
+            before="$(find "$RAW" -maxdepth 1 -type f -name '*.png' | wc -l)"
+            tap_key p
+            for _ in $(seq 1 30); do
+              local after
+              after="$(find "$RAW" -maxdepth 1 -type f -name '*.png' | wc -l)"
+              if [ "$after" -gt "$before" ]; then
+                local newest
+                newest="$(find "$RAW" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+                cp "$newest" "$OUT/${label}.png"
+                return 0
+              fi
+              sleep 0.10
+            done
+            echo "BlastEm did not create screenshot: $label" >&2
+            exit 1
+          }
+
+          sleep 1.5
+          take_shot 01_title
+          tap_key Return
+          take_shot 02_menu
+          tap_key Return
+          take_shot 03_battle_start
+
+          xdotool keydown --window "$WIN" Right
+          sleep 1.20
+          xdotool keyup --window "$WIN" Right
+          take_shot 04_battle_right
+
+          xdotool keydown --window "$WIN" Down
+          sleep 1.20
+          xdotool keyup --window "$WIN" Down
+          take_shot 05_battle_down
+
+          tap_key s
+          take_shot 06_menu_return
+
+          kill "$EMU_PID" 2>/dev/null || true
+          wait "$EMU_PID" 2>/dev/null || true
+          EMU_PID=0
+
+      - name: Analyze runtime screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import json
+
+          root=Path('sgdk/out/runtime_smoke')
+          names=['01_title','02_menu','03_battle_start','04_battle_right','05_battle_down','06_menu_return']
+          im={n:Image.open(root/f'{n}.png').convert('RGB') for n in names}
+          sizes={n:list(v.size) for n,v in im.items()}
+          if any(v.size != (320,224) for v in im.values()):
+              raise SystemExit(f'unexpected screenshot sizes: {sizes}')
+
+          def diff_ratio(a,b,box=None):
+              if box:
+                  a=a.crop(box); b=b.crop(box)
+              pa=list(a.getdata()); pb=list(b.getdata())
+              return sum(x!=y for x,y in zip(pa,pb))/len(pa)
+
+          field=(0,0,224,192)
+          right_hud=(224,0,320,192)
+          bottom=(0,192,320,224)
+          full=(0,0,320,224)
+
+          metrics={
+              'title_to_menu_full':diff_ratio(im['01_title'],im['02_menu'],full),
+              'menu_to_battle_full':diff_ratio(im['02_menu'],im['03_battle_start'],full),
+              'camera_right_field':diff_ratio(im['03_battle_start'],im['04_battle_right'],field),
+              'camera_right_hud':diff_ratio(im['03_battle_start'],im['04_battle_right'],right_hud),
+              'camera_right_bottom':diff_ratio(im['03_battle_start'],im['04_battle_right'],bottom),
+              'camera_down_field':diff_ratio(im['04_battle_right'],im['05_battle_down'],field),
+              'camera_down_hud':diff_ratio(im['04_battle_right'],im['05_battle_down'],right_hud),
+              'camera_down_bottom':diff_ratio(im['04_battle_right'],im['05_battle_down'],bottom),
+              'return_vs_menu_full':diff_ratio(im['06_menu_return'],im['02_menu'],full),
+              'return_vs_battle_full':diff_ratio(im['06_menu_return'],im['05_battle_down'],full),
+          }
+
+          failures=[]
+          if metrics['title_to_menu_full'] < 0.08: failures.append('TITLE->MENU did not visibly transition')
+          if metrics['menu_to_battle_full'] < 0.15: failures.append('MENU->BATTLE did not visibly transition')
+          if metrics['camera_right_field'] < 0.08: failures.append('RIGHT hold did not visibly move battlefield')
+          if metrics['camera_down_field'] < 0.08: failures.append('DOWN hold did not visibly move battlefield')
+          if metrics['camera_right_hud'] > 0.20: failures.append('right HUD changed too much during RIGHT camera move')
+          if metrics['camera_down_hud'] > 0.20: failures.append('right HUD changed too much during DOWN camera move')
+          if metrics['camera_right_bottom'] > 0.12: failures.append('bottom log changed too much during RIGHT camera move')
+          if metrics['camera_down_bottom'] > 0.12: failures.append('bottom log changed too much during DOWN camera move')
+          if metrics['return_vs_menu_full'] >= metrics['return_vs_battle_full']:
+              failures.append('B button did not return screen closer to menu than battle')
+
+          report={'emulator':'BlastEm Ubuntu package','region':'U/NTSC','screenshot_sizes':sizes,'metrics':metrics,
+                  'status':'PASS' if not failures else 'FAIL','failures':failures}
+          (root/'R3_RUNTIME_SMOKE_REPORT.json').write_text(json.dumps(report,indent=2)+'\n')
+          print(json.dumps(report,indent=2))
+          if failures: raise SystemExit(1)
+          PY
+
+      - name: Publish runtime smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_Runtime_Smoke_Evidence
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R3_RUNTIME_ROM_SHA256.txt
+            sgdk/out/R3_RUNTIME_ROM_AUDIT.json
+            sgdk/out/runtime_smoke/*.png
+            sgdk/out/runtime_smoke/*.json
+            sgdk/out/runtime_smoke/*.log
+          if-no-files-found: warn
