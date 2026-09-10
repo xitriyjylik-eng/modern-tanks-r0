@@ -1,10 +1,129 @@
-name: R3 upload staging
+name: R3 Static Region Smooth Camera SGDK CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - r3-map-camera
+    paths:
+      - 'sgdk/**'
+      - '.github/workflows/r0-build.yml'
 
 jobs:
-  staging:
+  build-r3:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+
     steps:
-      - run: echo "R3 source upload in progress"
+      - uses: actions/checkout@v4
+
+      - name: Install resource tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+
+      - name: Restore static authored R3 overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/r3_ci_overlay_small.py restore
+
+      - name: Generate accepted R2 ambient assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/build_refined_animation_assets.py
+
+      - name: Verify R3 map and camera contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          python3 sgdk/tools/r3_ci_overlay_small.py verify
+          sha256sum sgdk/res/r3_region1_playable.png sgdk/res/r3_region1_map.png sgdk/res/r3_battle_hud.png > sgdk/out/R3_RESOURCE_SHA256.txt
+
+      - name: Pin SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE"
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          DIGEST="$(docker image inspect "$SGDK_IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "SGDK_IMAGE_ID=$ID" >> "$GITHUB_ENV"
+          printf '%s\n' "$ID" > sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+          printf '%s\n' "$DIGEST" > sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+
+      - name: Prepare reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+          cp -a sgdk /tmp/sgdk-r3-a
+          cp -a sgdk /tmp/sgdk-r3-b
+          chmod -R a+rwX /tmp/sgdk-r3-a /tmp/sgdk-r3-b
+
+      - name: Build A
+        run: docker run --rm -v /tmp/sgdk-r3-a:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Build B
+        run: docker run --rm -v /tmp/sgdk-r3-b:/m68k "$SGDK_IMAGE_ID"
+
+      - name: Reproducibility and ROM audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/sgdk-r3-a/out/rom.bin
+          test -f /tmp/sgdk-r3-b/out/rom.bin
+          cmp /tmp/sgdk-r3-a/out/rom.bin /tmp/sgdk-r3-b/out/rom.bin
+          cp /tmp/sgdk-r3-a/out/rom.bin sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/R3_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R3_ROM_AUDIT.json
+
+      - name: Build report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sgdk/out
+          ROM_SHA=NOT_BUILT
+          ROM_SIZE=NOT_BUILT
+          if [ -f sgdk/out/rom.bin ]; then
+            ROM_SHA="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
+            ROM_SIZE="$(stat -c '%s' sgdk/out/rom.bin)"
+          fi
+          cat > sgdk/out/R3_BUILD_REPORT.md <<REPORT
+          # Modern Tanks R3 — Static Region / Smooth Camera Candidate
+          - Commit: ${GITHUB_SHA}
+          - SGDK: 2.11 pinned
+          - ROM size: ${ROM_SIZE}
+          - ROM SHA-256: ${ROM_SHA}
+          - Accepted R2 menu and ambient art: preserved
+          - Battle viewport: 224x192
+          - Right HUD: 96x192 fixed
+          - Bottom event log: 320x32 fixed
+          - Playable Region 1: 1024x768 static authored world
+          - Runtime MAP resource: 1024x1024 including safety padding
+          - Procedural map generation: forbidden
+          - Camera: per-visible-frame fixed-point acceleration, friction and PAL/NTSC scaling
+          - World scrolling: SGDK MAP_scrollTo
+          REPORT
+
+      - name: Publish R3 candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_Static_Region_Smooth_Camera_Candidate
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R3_SHA256.txt
+            sgdk/out/R3_ROM_AUDIT.json
+            sgdk/out/R3_BUILD_REPORT.md
+            sgdk/out/R3_RESOURCE_SHA256.txt
+            sgdk/out/R3_STATIC_MAP_REPORT.json
+            sgdk/out/R3_TOOLCHAIN_IMAGE_ID.txt
+            sgdk/out/R3_TOOLCHAIN_IMAGE_DIGEST.txt
+          if-no-files-found: warn
