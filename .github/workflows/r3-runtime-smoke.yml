@@ -108,9 +108,20 @@ jobs:
           export DISPLAY=:99
           export SDL_AUDIODRIVER=dummy
           export LIBGL_ALWAYS_SOFTWARE=1
+          EMU_PID=''
+          XVFB_PID=''
+          cleanup() {
+            if [ -n "${EMU_PID:-}" ] && [ "$EMU_PID" -gt 1 ] 2>/dev/null; then
+              kill "$EMU_PID" 2>/dev/null || true
+            fi
+            if [ -n "${XVFB_PID:-}" ] && [ "$XVFB_PID" -gt 1 ] 2>/dev/null; then
+              kill "$XVFB_PID" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
           Xvfb :99 -screen 0 640x480x24 -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
           XVFB_PID=$!
-          trap 'kill ${EMU_PID:-0} ${XVFB_PID:-0} 2>/dev/null || true' EXIT
           sleep 1
 
           blastem -g -r U sgdk/out/rom.bin 320 224 >"$OUT/blastem.log" 2>&1 &
@@ -179,7 +190,7 @@ jobs:
 
           kill "$EMU_PID" 2>/dev/null || true
           wait "$EMU_PID" 2>/dev/null || true
-          EMU_PID=0
+          EMU_PID=''
 
       - name: Analyze runtime screenshots
         shell: bash
