@@ -57,13 +57,14 @@ PY
   : > "$out/trace.csv"
   echo 'label,epoch_ms' >> "$out/trace.csv"
 
-  tap() { local key="$1"; xdotool keydown --window "$win" "$key"; sleep 0.03; xdotool keyup --window "$win" "$key"; }
+  pad_tap() { local key="$1"; xdotool keydown --window "$win" "$key"; sleep 0.20; xdotool keyup --window "$win" "$key"; }
+  shot_key() { xdotool keydown --window "$win" p; sleep 0.03; xdotool keyup --window "$win" p; }
   down() { xdotool keydown --window "$win" "$1"; }
   up() { xdotool keyup --window "$win" "$1"; }
   capture() {
     local label="$1" ts newest
     ts="$(date +%s%3N)"
-    tap p
+    shot_key
     sleep 0.09
     newest="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
     test -n "$newest"
@@ -72,10 +73,10 @@ PY
   }
 
   sleep 1.5
-  tap Return
+  pad_tap Return
   sleep 1.1
   capture 00_menu
-  tap Return
+  pad_tap Return
   sleep 1.2
   capture 01_start
 
