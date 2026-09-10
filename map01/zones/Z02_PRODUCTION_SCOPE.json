@@ -1,0 +1,27 @@
+{
+  "zone_id": "Z02",
+  "name_ru": "Северо-западные руины и западный лесной подход",
+  "master_size_px": [1536, 1152],
+  "crop_bounds_px": [0, 0, 640, 512],
+  "crop_size_px": [640, 512],
+  "sector_size_px": [128, 128],
+  "sector_grid_span": [5, 4],
+  "sector_count": 20,
+  "crop_file_sha256": "824802b051d7a9130e184bf4fb6e7e7c44379329102807e20a37cd8763a15075",
+  "crop_pixel_sha256": "23f563fd0de25b8e3818865e53bc0254fbb8c3da989f17451b6762ebb488ea4c",
+  "pixel_identical_to_approved_master_crop": true,
+  "rescaled": false,
+  "regenerated": false,
+  "procedural_geography": false,
+  "contains": [
+    "северо-западный комплекс руин",
+    "скальные гряды вокруг руин",
+    "лесные проходы",
+    "главная дорога Z02↔Z01",
+    "южный подход к Z10",
+    "восточная переходная полоса к Z03/Z01"
+  ],
+  "overlap_policy": "Восточные 128 px намеренно захватывают стык с уже готовыми Z03/Z01. Общие логические клетки при ручной разметке Z02 наследовать из авторитетных соседних зон cell-for-cell, а не размечать заново.",
+  "art_policy": "Точный crop утверждённого master. Без перерисовки, масштабирования и процедурной генерации географии.",
+  "next_step": "MANUAL_TERRAIN_COLLISION_AUTHORING"
+}
