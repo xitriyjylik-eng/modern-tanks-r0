@@ -16,7 +16,6 @@ jobs:
       contents: read
     env:
       SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
-      OVERLAY_SHA256: 8a80e2d255ba685e0d17d5b24631e2dfe3bb650f514e441064f30c11da8ad44b
 
     steps:
       - uses: actions/checkout@v4
@@ -29,11 +28,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils
 
-      - name: Verify Map01 data overlay
+      - name: Verify Map01 overlay container
         shell: bash
         run: |
           set -euo pipefail
-          echo "$OVERLAY_SHA256  map01ci/data_overlay.tar.gz" | sha256sum -c -
+          sha256sum map01ci/data_overlay.tar.gz
+          gzip -t map01ci/data_overlay.tar.gz
+          tar -tzf map01ci/data_overlay.tar.gz
 
       - name: Normalize R3 transport and restore verified renderer base
         shell: bash
@@ -68,15 +69,20 @@ jobs:
           python3 sgdk/tools/r3_ci_overlay_small.py restore
           python3 sgdk/tools/r3_ci_overlay_small.py verify
 
-      - name: Apply Map01 authored data integration
+      - name: Apply and verify Map01 authored data integration
         shell: bash
         run: |
           set -euo pipefail
           tar -xzf map01ci/data_overlay.tar.gz -C .
+          cat <<'EOF' | sha256sum -c -
+          e1e4213bbe7038619c3c3346699b59399556bf35f91e7874b3e344224ea903ac  sgdk/src/map01_runtime.h
+          15204a0afcbd1e5d9610b1eec21b0673e11d9e04f803491a1c72b71f5dd13728  sgdk/src/map01_z01_data.h
+          9de2ebe57b720d1a3f5784b7057de4e48e889aad2e42e6d3b05132f270f0dd7d  sgdk/src/map01_runtime.c
+          e80defebeb5df791aa1cfcc0c5027ab3a93edb0826080e3e46155547293dc029  sgdk/src/map01_z01_data.c
+          2262b6e32d0b6511b115dc11533aa9099a01ca5e3d5f22c232e9aed257f62015  sgdk/src/main.c
+          EOF
           grep -q 'MAP01_Z01_getPlayerStart' sgdk/src/main.c
           grep -q 'R3 BG = TEMP PLACEHOLDER' sgdk/src/main.c
-          test -f sgdk/src/map01_runtime.c
-          test -f sgdk/src/map01_z01_data.c
           python3 sgdk/tools/build_refined_animation_assets.py >/tmp/map01_ambient.log
 
       - name: Build separate Map01 integration ROM
