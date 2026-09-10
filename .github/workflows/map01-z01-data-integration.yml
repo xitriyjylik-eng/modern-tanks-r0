@@ -27,8 +27,9 @@ jobs:
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils python3-pil
+          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils python3-pil imagemagick
           python3 -c 'from PIL import Image; print("Pillow available for Map01 smoke analyzer")'
+          command -v import
 
       - name: Reconstruct and verify Map01 overlay
         shell: bash
@@ -105,22 +106,10 @@ jobs:
         run: |
           set -euo pipefail
           OUT="$PWD/sgdk/out/map01_smoke"
-          RAW="$RUNNER_TEMP/map01-shots"
           HOME_DIR="$RUNNER_TEMP/map01-home"
-          mkdir -p "$OUT" "$RAW" "$HOME_DIR/.config/blastem"
+          mkdir -p "$OUT" "$HOME_DIR/.config/blastem"
           CFG_SRC="$(dpkg -L blastem | grep -E '/default\.cfg$' | head -n1 || true)"
           if [ -n "$CFG_SRC" ]; then cp "$CFG_SRC" "$HOME_DIR/.config/blastem/blastem.cfg"; else printf 'ui {\n}\n' > "$HOME_DIR/.config/blastem/blastem.cfg"; fi
-          python3 - "$HOME_DIR/.config/blastem/blastem.cfg" "$RAW" <<'PY'
-          from pathlib import Path
-          import re,sys
-          p=Path(sys.argv[1]); raw=sys.argv[2]
-          s=p.read_text(errors='replace')
-          if re.search(r'(?m)^\s*screenshot_path\s+',s): s=re.sub(r'(?m)^\s*screenshot_path\s+.*$',f'\tscreenshot_path {raw}',s)
-          else: s=s.replace('ui {',f'ui {{\n\tscreenshot_path {raw}',1)
-          if re.search(r'(?m)^\s*screenshot_template\s+',s): s=re.sub(r'(?m)^\s*screenshot_template\s+.*$',r'\tscreenshot_template map01_%Y%m%d_%H%M%S.png',s)
-          else: s=s.replace('ui {','ui {\n\tscreenshot_template map01_%Y%m%d_%H%M%S.png',1)
-          p.write_text(s)
-          PY
           export HOME="$HOME_DIR" DISPLAY=:99 SDL_AUDIODRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1
           Xvfb :99 -screen 0 640x480x24 -nolisten tcp >"$OUT/xvfb.log" 2>&1 & XVFB_PID=$!
           for _ in $(seq 1 50); do xdpyinfo -display :99 >/dev/null 2>&1 && break; sleep .1; done
@@ -128,26 +117,45 @@ jobs:
           blastem -g -r U sgdk/out/rom.bin 320 224 >"$OUT/blastem.log" 2>&1 & EMU_PID=$!
           trap 'kill ${EMU_PID:-999999} ${XVFB_PID:-999998} 2>/dev/null || true' EXIT
           WIN=''
-          for _ in $(seq 1 80); do WIN="$(xdotool search --pid "$EMU_PID" 2>/dev/null | head -n1 || true)"; [ -n "$WIN" ] && break; kill -0 "$EMU_PID" 2>/dev/null || exit 1; sleep .1; done
+          for _ in $(seq 1 80); do
+            WIN="$(xdotool search --pid "$EMU_PID" 2>/dev/null | head -n1 || true)"
+            [ -n "$WIN" ] && break
+            kill -0 "$EMU_PID" 2>/dev/null || exit 1
+            sleep .1
+          done
           test -n "$WIN"
-          shot(){ label="$1"; before=$(find "$RAW" -name '*.png' | wc -l); xdotool keydown --window "$WIN" p; sleep .12; xdotool keyup --window "$WIN" p; for _ in $(seq 1 50); do after=$(find "$RAW" -name '*.png' | wc -l); if [ "$after" -gt "$before" ]; then f=$(find "$RAW" -name '*.png' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-); for __ in $(seq 1 40); do python3 - "$f" <<'PY' >/dev/null 2>&1 && break || true
+          xdotool windowfocus "$WIN" 2>/dev/null || true
+          shot(){
+            local label="$1"
+            import -window "$WIN" "png:$OUT/$label.png"
+            python3 - "$OUT/$label.png" <<'PY'
           from PIL import Image
           import sys
-          Image.open(sys.argv[1]).verify()
+          im=Image.open(sys.argv[1]); im.verify()
+          print(sys.argv[1], im.size)
           PY
-          sleep .05; done; cp "$f" "$OUT/$label.png"; return; fi; sleep .1; done; return 1; }
-          tap(){ xdotool keydown --window "$WIN" "$1"; sleep .25; xdotool keyup --window "$WIN" "$1"; sleep .8; }
-          sleep 1.5
+          }
+          tap(){
+            xdotool keydown --window "$WIN" "$1"
+            sleep .25
+            xdotool keyup --window "$WIN" "$1"
+            sleep 1.5
+          }
+
+          # Wait until the title/menu bank has had ample time to finish loading.
+          sleep 4.0
           shot 01_title
-          sleep 2.5
           tap Return
           shot 02_menu
           tap Return
           shot 03_battle_start
-          xdotool keydown --window "$WIN" Right; sleep 1.2; xdotool keyup --window "$WIN" Right; sleep .5; shot 04_battle_right
-          xdotool keydown --window "$WIN" Down; sleep 1.2; xdotool keyup --window "$WIN" Down; sleep .5; shot 05_battle_down
-          tap s; shot 06_menu_return
-          kill "$EMU_PID" 2>/dev/null || true; wait "$EMU_PID" 2>/dev/null || true; EMU_PID=''
+          xdotool keydown --window "$WIN" Right; sleep 1.2; xdotool keyup --window "$WIN" Right; sleep .6; shot 04_battle_right
+          xdotool keydown --window "$WIN" Down; sleep 1.2; xdotool keyup --window "$WIN" Down; sleep .6; shot 05_battle_down
+          tap s
+          shot 06_menu_return
+          kill "$EMU_PID" 2>/dev/null || true
+          wait "$EMU_PID" 2>/dev/null || true
+          EMU_PID=''
 
           rm -rf sgdk/out/runtime_smoke
           mkdir -p sgdk/out/runtime_smoke
@@ -159,12 +167,18 @@ jobs:
           names=['01_title','02_menu','03_battle_start','04_battle_right','05_battle_down','06_menu_return']
           for name in names:
               im=Image.open(src/f'{name}.png').convert('RGB')
-              if im.size == (347,243):
+              w,h=im.size
+              if (w,h)==(347,243):
                   im=im.crop((13,11,333,235))
-              elif im.size != (320,224):
-                  raise SystemExit(f'unsupported BlastEm screenshot size for {name}: {im.size}')
-              if im.size != (320,224):
-                  raise SystemExit(f'bad active crop for {name}: {im.size}')
+              elif (w,h)==(320,224):
+                  pass
+              elif w>=320 and h>=224:
+                  left=(w-320)//2
+                  top=(h-224)//2
+                  im=im.crop((left,top,left+320,top+224))
+              else:
+                  raise SystemExit(f'unsupported X11 capture size for {name}: {(w,h)}')
+              assert im.size==(320,224),(name,im.size)
               im.save(dst/f'{name}.png')
           print('Map01 active frame normalization PASS')
           PY
