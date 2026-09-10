@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "map_id": "REGION_1_MAP_01",
+  "status": "STRUCTURE_IMPLEMENTED_ART_PENDING",
+  "master_size_px": [4096, 3072],
+  "sector_size_px": [256, 256],
+  "sector_grid": [16, 12],
+  "sector_count": 192,
+  "reference_priority": [
+    "PROJECT_SOURCE/references/MAP_01_VISUAL_REFERENCE_APPROVED.png",
+    "PROJECT_SOURCE/references/MAP_01_IMPLEMENTATION_PLANNING_REFERENCE.png"
+  ],
+  "layers": ["WORLD_ART", "TERRAIN", "COLLISION", "OBJECTS", "EVENTS", "SPAWN"],
+  "runtime": {
+    "camera_foundation": "retain_from_R3",
+    "streaming_strategy": "sector/page streaming if a single SGDK MAP cannot preserve master art",
+    "art_quality_may_be_reduced_for_tile_dedup": false,
+    "procedural_terrain_generation": false
+  }
+}
