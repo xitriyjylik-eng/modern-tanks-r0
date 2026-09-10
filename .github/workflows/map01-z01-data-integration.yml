@@ -137,14 +137,37 @@ jobs:
           PY
           sleep .05; done; cp "$f" "$OUT/$label.png"; return; fi; sleep .1; done; return 1; }
           tap(){ xdotool keydown --window "$WIN" "$1"; sleep .25; xdotool keyup --window "$WIN" "$1"; sleep .8; }
-          sleep 1.5; shot 01_title; tap Return; shot 02_menu; tap Return; shot 03_battle_start
+          sleep 1.5
+          shot 01_title
+          sleep 2.5
+          tap Return
+          shot 02_menu
+          tap Return
+          shot 03_battle_start
           xdotool keydown --window "$WIN" Right; sleep 1.2; xdotool keyup --window "$WIN" Right; sleep .5; shot 04_battle_right
           xdotool keydown --window "$WIN" Down; sleep 1.2; xdotool keyup --window "$WIN" Down; sleep .5; shot 05_battle_down
           tap s; shot 06_menu_return
           kill "$EMU_PID" 2>/dev/null || true; wait "$EMU_PID" 2>/dev/null || true; EMU_PID=''
+
           rm -rf sgdk/out/runtime_smoke
-          cp -a "$OUT" sgdk/out/runtime_smoke
-          python3 -c 'from PIL import Image; print("Pillow ready immediately before analyzer")'
+          mkdir -p sgdk/out/runtime_smoke
+          python3 - "$OUT" sgdk/out/runtime_smoke <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import sys
+          src=Path(sys.argv[1]); dst=Path(sys.argv[2])
+          names=['01_title','02_menu','03_battle_start','04_battle_right','05_battle_down','06_menu_return']
+          for name in names:
+              im=Image.open(src/f'{name}.png').convert('RGB')
+              if im.size == (347,243):
+                  im=im.crop((13,11,333,235))
+              elif im.size != (320,224):
+                  raise SystemExit(f'unsupported BlastEm screenshot size for {name}: {im.size}')
+              if im.size != (320,224):
+                  raise SystemExit(f'bad active crop for {name}: {im.size}')
+              im.save(dst/f'{name}.png')
+          print('Map01 active frame normalization PASS')
+          PY
           python3 sgdk/tools/analyze_r3_runtime_smoke.py | tee "$OUT/MAP01_SMOKE_REPORT.json"
           cp sgdk/out/runtime_smoke/*_active.png "$OUT"/
 
