@@ -27,7 +27,8 @@ jobs:
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils
+          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils python3-pil
+          python3 -c 'from PIL import Image; print("Pillow available for Map01 smoke analyzer")'
 
       - name: Reconstruct and verify Map01 overlay
         shell: bash
@@ -141,7 +142,11 @@ jobs:
           xdotool keydown --window "$WIN" Down; sleep 1.2; xdotool keyup --window "$WIN" Down; sleep .5; shot 05_battle_down
           tap s; shot 06_menu_return
           kill "$EMU_PID" 2>/dev/null || true; wait "$EMU_PID" 2>/dev/null || true; EMU_PID=''
+          rm -rf sgdk/out/runtime_smoke
+          cp -a "$OUT" sgdk/out/runtime_smoke
+          python3 -c 'from PIL import Image; print("Pillow ready immediately before analyzer")'
           python3 sgdk/tools/analyze_r3_runtime_smoke.py | tee "$OUT/MAP01_SMOKE_REPORT.json"
+          cp sgdk/out/runtime_smoke/*_active.png "$OUT"/
 
       - name: Publish Map01 integration candidate
         if: always()
