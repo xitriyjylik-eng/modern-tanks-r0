@@ -48,12 +48,10 @@ CI и диагностические метрики не являются сам
 - WORLD_ART scope: DONE, exact crop 768×512;
 - TERRAIN/COLLISION: DONE V2;
 - overlap с Z01: 2560 cells/layer inherited cell-for-cell — PASS;
-- OBJECTS/EVENTS: DONE, затем consistency-fix при runtime-этапе;
-- физический северный мост и его bridge-event имеют единственного owner: Z01; дубликаты Z03 удалены;
+- OBJECTS/EVENTS: DONE;
+- физический северный мост и bridge-event имеют единственного owner: Z01;
 - owned OBJECTS Z03: 8; shared refs from Z01: 1;
 - owned EVENTS Z03: 7; shared refs from Z01: 1;
-- переход Z03→Z04 выровнен по фактической восточной дороге;
-- переход Z03→Z01 перенесён из глубины overlap к реальному переходному коридору;
 - SPAWN/runtime: DONE V1;
 - spawn points: 12 = 3 ZONE_ENTRY + 3 NPC + 2 VEHICLE + 2 ENEMY + 2 EFFECT;
 - второй активный PLAYER_START не создаётся;
@@ -61,10 +59,13 @@ CI и диагностические метрики не являются сам
 - общий terrain/collision router Z01+Z03: DONE;
 - host C syntax `-Wall -Wextra -Werror`: PASS;
 - validation: PASS, errors=0, warnings=0;
-- integration check: **NEXT — одна проверка Z01↔Z03, затем переход к следующей зоне**.
+- Z01↔Z03 integration check: **PASS** — routing, overlap, bridge ownership, transition anchors и seam data проверены C integration harness.
+
+### Следующая зона — Z02 Северо-западные руины
+Следующий конечный конвейер начинается с `Z02 WORLD_ART scope`. Z02 выбрана потому, что непосредственно соединяет уже готовую Z03 с западной частью мира и далее с Z10.
 
 ### Остальные зоны
-Z02, Z04, Z05, Z06, Z07, Z08, Z09, Z10, Z11 — PENDING в порядке связности с уже готовыми зонами.
+Z04, Z05, Z06, Z07, Z08, Z09, Z10, Z11 — PENDING в порядке связности с уже готовыми зонами.
 
 ## Acceptance gate R3
 R3 нельзя считать `ACCEPTED/CLOSED`, пока одновременно не выполнены:
