@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "terrain": [
+    {"id":0,"name":"NORMAL","drive_class":"NORMAL"},
+    {"id":1,"name":"ROAD","drive_class":"FAST"},
+    {"id":2,"name":"FOREST","drive_class":"SLOW"},
+    {"id":3,"name":"MUD","drive_class":"SLOW"},
+    {"id":4,"name":"SWAMP","drive_class":"VERY_SLOW"},
+    {"id":5,"name":"SHALLOW_WATER","drive_class":"CONDITIONAL"},
+    {"id":6,"name":"DEEP_WATER","drive_class":"BLOCKED_BY_DEFAULT"},
+    {"id":7,"name":"BRIDGE","drive_class":"NORMAL"},
+    {"id":8,"name":"ROCK","drive_class":"BLOCKED_BY_DEFAULT"},
+    {"id":9,"name":"BUILDING","drive_class":"BLOCKED_BY_DEFAULT"},
+    {"id":10,"name":"RUINS","drive_class":"CONDITIONAL"}
+  ],
+  "collision": [
+    {"id":0,"name":"FREE","blocks_movement":false},
+    {"id":1,"name":"HARD_BLOCK","blocks_movement":true},
+    {"id":2,"name":"WATER_BLOCK","blocks_movement":true},
+    {"id":3,"name":"CLIFF_BLOCK","blocks_movement":true},
+    {"id":4,"name":"STRUCTURE_BLOCK","blocks_movement":true},
+    {"id":5,"name":"MAP_BORDER","blocks_movement":true},
+    {"id":6,"name":"CONDITIONAL","blocks_movement":"runtime_rule"}
+  ],
+  "object_types": ["STATIC_BUILDING","BRIDGE","RUIN","DECOR_LARGE","LANDMARK","REGION_EXIT","INTERACTIVE_POINT"],
+  "event_types": ["ZONE_ENTER","ZONE_EXIT","DISCOVERY","REGION_EXIT","MISSION_TRIGGER","BRIDGE_CROSS","ENCOUNTER_AREA"],
+  "spawn_types": ["PLAYER_START","NPC","VEHICLE","ENEMY","EFFECT"],
+  "balance_note": "Игровые коэффициенты движения и баланса на этом этапе не фиксируются."
+}
