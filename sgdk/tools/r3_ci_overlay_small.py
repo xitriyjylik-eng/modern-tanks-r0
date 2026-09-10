@@ -9,7 +9,7 @@ import base64, zlib, lzma, struct, hashlib, json, sys
 
 ROOT = Path(__file__).resolve().parents[1]
 RES, SRC, DATA, OUT = ROOT/'res', ROOT/'src', ROOT/'r3ci', ROOT/'out'
-MAIN_SHA='7d323d753e174a258fe330d97c2e43e2a30ce86e3fd1af918fc45b79124211e6'
+MAIN_SHA='0eb6593357d6b42c002ad9d0c457a156b3b5908048db118b1c227543fb641bcc'
 RES_SHA='362551a132bc578a5732630a94bd17c8a72db47cf03790c2f574151eaa496b50'
 WORLD_PIXEL_SHA='ca6722ef521a62af8936829308018698453ea6df7a5517c9b301cdc0dc141f00'
 MAP_PIXEL_SHA='5536cb5234020e698a54d77823912673ae5d53ec52fcf80174044e5c84fe8d3f'
@@ -95,8 +95,12 @@ def verify():
     for t in ('MAP_create(&r3_region1_map','MAP_scrollTo(battleMap','MAP_release(battleMap)',
               'R3_CAMERA_ACCEL_FP','R3_CAMERA_FRICTION_FP','R3_CAMERA_MAX_SPEED_FP',
               'camera_scale_for_video','update_battle_camera_frame','R3_VIEW_WIDTH_PX 224',
-              'R3_VIEW_HEIGHT_PX 192','PAL_setPaletteColors(0, r2_menu_bg.palette, CPU)'):
+              'R3_VIEW_HEIGHT_PX 192','PAL_setPaletteColors(0, r2_menu_bg.palette, CPU)',
+              'R3_HUD_FONT_COUNT 96','r3HudOpaqueFont','VDP_loadTileData(r3HudOpaqueFont',
+              'r3_draw_hud_text("REGION 1"','r3_draw_hud_text(buffer, 31, 4)'):
         assert t in src,t
+    assert 'VDP_drawText("REGION 1"' not in src
+    assert 'VDP_drawText("R3 WORLD STREAM / CAMERA"' not in src
     for t in ('TILESET r3_region1_tileset "r3_region1_map.png" NONE ALL',
               'MAP r3_region1_map "r3_region1_map.png" r3_region1_tileset NONE',
               'IMAGE r3_battle_hud "r3_battle_hud.png" NONE ALL'):
@@ -110,7 +114,7 @@ def verify():
             'exact_accepted_landscape_tile_occurrence_share':share,'playable_pixel_sha256':psha(play),
             'map_pixel_sha256':psha(world),'hud_pixel_sha256':psha(hud),
             'layout':'static manually authored Region 1','runtime_procedural_generation':False,
-            'serialization':'lossless static CI transport only'}
+            'serialization':'lossless static CI transport only','battle_hud_text':'opaque SGDK 2.11 glyph mask on PAL0 index 7 background'}
     (OUT/'R3_STATIC_MAP_REPORT.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     print('R3 verification PASS'); print(f'R2 landscape tile share={share:.3%}')
 
