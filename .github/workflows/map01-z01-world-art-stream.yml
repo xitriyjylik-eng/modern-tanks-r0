@@ -26,10 +26,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends blastem xvfb xdotool x11-utils imagemagick
-          python3 -c 'from PIL import Image; import numpy; print("Map01 world-art tooling PASS")'
+          python3 -c 'from PIL import Image; import numpy, scipy; print("Map01 world-art tooling PASS")'
 
       - name: Restore and verify accepted renderer base
         shell: bash
