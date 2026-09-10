@@ -48,8 +48,9 @@ CI и диагностические метрики не являются сам
 - WORLD_ART scope: DONE, exact crop 768×512;
 - TERRAIN/COLLISION: DONE V2;
 - overlap с Z01: 2560 cells/layer inherited cell-for-cell — PASS;
-- OBJECTS/EVENTS: NEXT;
-- SPAWN/runtime: PENDING;
+- OBJECTS/EVENTS: DONE V1 — 10 objects, 8 events, 24 sector indices, validation PASS;
+- переходы: Z03→Z01, Z03→Z02, Z03→Z04, северный reserved REGION_2;
+- SPAWN/runtime: NEXT;
 - integration check: PENDING.
 
 ### Остальные зоны
