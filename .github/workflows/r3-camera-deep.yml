@@ -9,6 +9,9 @@ on:
       - '.github/workflows/r3-camera-deep.yml'
       - 'sgdk/tools/run_r3_camera_deep.sh'
       - 'sgdk/tools/analyze_r3_camera_deep.py'
+      - 'sgdk/tools/analyze_r3_hud_visual.py'
+      - 'sgdk/tools/r3_ci_overlay_small.py'
+      - 'sgdk/r3ci/main.*.b64'
 
 jobs:
   camera-deep:
@@ -87,7 +90,13 @@ jobs:
           set -euo pipefail
           python3 sgdk/tools/analyze_r3_camera_deep.py
 
-      - name: Publish camera evidence
+      - name: Audit HUD opacity and fixed UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/analyze_r3_hud_visual.py
+
+      - name: Publish camera and HUD evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
