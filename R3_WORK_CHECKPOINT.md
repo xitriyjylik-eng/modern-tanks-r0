@@ -15,38 +15,49 @@ GitHub Actions run: `34427893276` / run #157.
 - точное совпадение тайлов с принятым R2-ландшафтом: `98.258%`.
 
 ### Этап 2 — запуск SGDK-сборки: ЗАВЕРШЁН
-Проверено по фактическому логу run #157, а не только по YAML.
-
 Фактически использованный toolchain:
 - image tag: `registry.gitlab.com/doragasu/docker-sgdk:v2.11`;
 - registry pull digest: `sha256:327ab838fbdf6bc741c6a7a11ee3c937cf1aaf1dc07a475995e89b741b6a830d`;
 - local Docker image id: `sha256:e66837c905b7878e02ecfce1e3b906856dad5d751789c29b97555798f6b66972`;
 - ResComp: `3.95`;
 - compiler: `m68k-elf-gcc` for `-m68000`.
+R3 `main.c` и `resources.res` реально восстановлены из hash-verified static payload и вошли в сборку.
 
-Проверена структура SGDK-проекта: `src/`, `res/`, `r3ci/`, `tools/` и build scripts присутствуют.
+### Этап 3 — компиляция/линковка R3: ЗАВЕРШЁН
+Проверено по полному логу GitHub Actions run #157.
 
-Особенность хранения R3:
-- repository `sgdk/src/main.c` и `sgdk/res/resources.res` остаются базовыми R2-файлами;
-- `sgdk/tools/r3_ci_overlay_small.py restore` до сборки декодирует hash-verified статический R3 payload из `sgdk/r3ci` и заменяет ими `src/main.c` и `res/resources.res`;
-- это lossless transport, не процедурная генерация карты.
+Результаты:
+- `src/main.c` компилировался с `-Wall -Wextra` и `-O3` без сообщений compiler `warning:` и без `error:`;
+- SGDK API-вызовы, типы и объявления ресурсов прошли компиляцию;
+- ResComp 3.95 успешно обработал R3-ресурсы без resource compiler errors;
+- `r3_region1_tileset`: raw size `21000 bytes`;
+- `r3_region1_map`: raw size `17992 bytes`, `1 tileset`, `1469 metatiles`, `48 blocks`, block grid `8 x 8`, optimized `8 x 6`;
+- `r3_battle_hud`: raw size `2948 bytes`;
+- общий `resources.res` summary: `88442 bytes (86 KB)`;
+- `out/res/resources.o` и `out/src/main.o` успешно переданы линкеру;
+- `m68k-elf-gcc` linker завершился без undefined references / overflow / link errors;
+- `m68k-elf-objcopy` создал `out/rom.bin`;
+- `sizebnd.jar` завершился успешно.
 
-Подтверждение фактического участия R3 в сборке:
-- restore завершился сообщением `R3 CI overlay restored from static authored payload`;
-- ResComp обработал `TILESET r3_region1_tileset`, `MAP r3_region1_map`, `IMAGE r3_battle_hud`;
-- resource summary: `88442 bytes (86 KB)`;
-- затем `m68k-elf-gcc` реально скомпилировал `src/main.c` в `out/src/main.o`;
-- линкер включил `out/res/resources.o` и `out/src/main.o` в ROM.
+Предупреждения в CI, не относящиеся к игровому коду:
+- Pillow `DeprecationWarning` на параметр `mode` во вспомогательном Python-скрипте;
+- GitHub Actions предупреждает об устаревании Node 20 для `actions/checkout@v4` / `actions/upload-artifact@v4`.
+Они не являются ошибками SGDK/ROM и не влияют на исполняемый код Mega Drive.
 
-**Итог Этапа 2: PASS. SGDK-сборка действительно запускается и получает восстановленные R3-код и ресурсы.**
+Ограничение проверки Этапа 3:
+- compile/link PASS подтверждает корректность API/типов/ресурсов на этапе сборки;
+- фактический runtime-бюджет VRAM и поведение при переключении экранов компилятор не доказывает. Это будет проверяться на соответствующих последующих этапах и не считается дефектом Этапа 3.
+
+**Итог Этапа 3: PASS. Ошибок компилятора, ResComp или линкера R3 не найдено.**
 
 ## Следующий шаг при команде «Продолжай»
 
-Начать **Этап 3 — проверить компиляцию R3 и наличие/отсутствие ошибок компилятора**:
-1. отдельно разобрать вывод `m68k-elf-gcc`, linker и ResComp на warnings/errors;
-2. проверить, нет ли скрытых проблем API SGDK, типов, MAP, палитр и VRAM на compile/link уровне;
-3. если ошибки есть — исправить и пересобрать; если ошибок нет — зафиксировать PASS;
-4. остановиться после Этапа 3, не переходя к проверке воспроизводимости Этапа 4.
+Начать **Этап 4 — воспроизводимость ROM**:
+1. проверить две независимые сборки A и B;
+2. подтвердить побайтовое совпадение через `cmp`;
+3. проверить SHA-256 итогового ROM;
+4. при необходимости повторить сборку для подтверждения детерминизма;
+5. зафиксировать результат и остановиться, не переходя к техническому аудиту ROM Этапа 5.
 
 ## Правило работы по этапам и времени
 
