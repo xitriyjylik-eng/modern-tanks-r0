@@ -3,76 +3,37 @@
 Дата: 2026-09-10  
 Статус R3: **IN PROGRESS / MAP 01 PRODUCTION / NOT ACCEPTED**.
 
-## Для чего теперь ведётся R3
-R3 должен довести уже проверенную техническую основу battle renderer / HUD / smooth camera до полноценной большой Map 01 с утверждённой графикой, логическими слоями и потоковой работой без долгой загрузки.
-
-Старый кандидат R3 1024×768 сохраняется только как техническое доказательство камеры, MAP lifecycle, HUD и BlastEm soak. Его художественная карта отклонена и не является целевым WORLD_ART.
-
 ## Постоянные правила R3 для Map 01
 - главный художественный источник: утверждённый `MAP01_WORLD_ART_MASTER_SOURCE.png`, 1536×1152;
 - WORLD_ART не масштабировать и не регенерировать;
 - мир не строить процедурно и не превращать в повторяющийся tile carpet;
-- техническая сетка: 12×9 = 108 секторов 128×128; границы игрок не должен видеть;
-- автоматизация допустима только как технический перенос, нарезка, конвертация и проверка уже существующей авторской карты;
+- техническая сетка: 12×9 = 108 секторов 128×128;
+- автоматизация допустима только как технический перенос, нарезка, конвертация и проверка уже существующей авторской карты и вручную заданных логических решений;
+- автоматическая генерация географии/дорог/объектов и image auto-classification запрещены;
 - визуальное качество важнее экономии tileset/ROM;
-- если один SGDK MAP не сохраняет качество и скорость, использовать sector/page streaming, а не упрощать карту;
 - `main` не изменять до явной пользовательской приёмки R3.
-
-## Общий конечный маршрут R3
-1. Эталон и география Map 01 — **DONE**.
-2. Production-структура Map 01 и sector/layer contract — **DONE**.
-3. WORLD_ART по зонам — **IN PROGRESS**.
-4. TERRAIN + COLLISION по зонам — **IN PROGRESS**.
-5. OBJECTS + EVENTS по зонам — **IN PROGRESS**.
-6. SPAWN + runtime data по зонам — **IN PROGRESS**.
-7. Интеграция всей Map 01 в battle renderer/streaming — **PENDING**.
-8. Камера, соседние sector loads, seams, latency, NTSC/PAL — **PENDING FINAL MAP**.
-9. Полный emulator regression + soak всей карты — **PENDING FINAL MAP**.
-10. Пользовательская визуальная/игровая приёмка — **PENDING**.
 
 ## Конвейер каждой зоны
 `WORLD_ART scope → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → integration check → next zone`.
 
-CI и диагностические метрики не являются самостоятельной целью. Они не должны останавливать создание карты, если проверяемая функция уже доказана и нет реальной регрессии.
-
 ## Текущий прогресс зон
 ### Z01 — Центральная деревня
-- WORLD_ART: DONE;
-- TERRAIN/COLLISION: DONE;
-- OBJECTS/EVENTS: DONE;
-- SPAWN/runtime: DONE;
-- отдельная SGDK/BlastEm technical proof: DONE;
-- финальная пользовательская приёмка как части всей карты: PENDING.
+Полный технический конвейер DONE; финальная пользовательская приёмка PENDING.
 
-### Z03 — Северный водопад / верхняя река / северный мост
-- WORLD_ART scope: DONE, exact crop 768×512;
-- TERRAIN/COLLISION: DONE V2;
-- overlap с Z01: 2560 cells/layer inherited cell-for-cell — PASS;
-- OBJECTS/EVENTS: DONE;
-- физический северный мост и bridge-event имеют единственного owner: Z01;
-- SPAWN/runtime: DONE V1;
-- общий terrain/collision router Z01+Z03: DONE;
-- validation: PASS;
-- Z01↔Z03 integration check: **PASS**.
+### Z03 — Северный водопад
+Полный конвейер DONE; Z01↔Z03 integration check PASS.
 
 ### Z02 — Северо-западные руины
-- WORLD_ART scope: **DONE V1**;
+- WORLD_ART scope: DONE V1;
 - exact master crop: `[0,0,640,512]`, 640×512;
-- sector grid span: 5×4 = 20 секторов;
-- pixel identity с утверждённым master: PASS;
-- rescale/regeneration/procedural geography: NO;
-- восточная полоса захватывает seam с Z03/Z01 для непрерывности;
-- следующий шаг: **MANUAL TERRAIN/COLLISION AUTHORING**.
+- 20 секторов;
+- TERRAIN/COLLISION: **DONE V1 / QA REVIEWED**;
+- 80×64 = 5120 логических ячеек на слой;
+- западная новая часть размечена вручную;
+- восточный overlap с Z03: 2048 ячеек/слой, cell-for-cell PASS;
+- terrain SHA-256: `4761366821ab36c526dc0a039e2d2742a2595b6c0b0c4e2bda7d7f0920d594d8`;
+- collision SHA-256: `96293ae3d14f36b0e9ff271675b77ec49cc070e8118affb781a1075656c04769`;
+- next: **OBJECTS + EVENTS AUTHORING**.
 
 ### Остальные зоны
-Z04, Z05, Z06, Z07, Z08, Z09, Z10, Z11 — PENDING в порядке связности с уже готовыми зонами.
-
-## Acceptance gate R3
-R3 нельзя считать `ACCEPTED/CLOSED`, пока одновременно не выполнены:
-- вся целевая Map 01 использует утверждённый WORLD_ART, а не старый R3 placeholder;
-- все нужные зоны имеют production logic layers;
-- переходы между соседними секторами визуально и логически непрерывны;
-- вход в карту не имеет неприемлемой задержки;
-- камера остаётся плавной на реальной полной карте;
-- NTSC/PAL regression и soak пройдены на финальной карте;
-- владелец явно подтвердил внешний вид и ощущения.
+Z04, Z05, Z06, Z07, Z08, Z09, Z10, Z11 — PENDING.

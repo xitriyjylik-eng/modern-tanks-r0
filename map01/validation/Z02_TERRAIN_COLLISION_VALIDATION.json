@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "errors": [],
+  "checks": {
+    "terrain_size": true,
+    "collision_size": true,
+    "z03_overlap_terrain_exact": true,
+    "z03_overlap_collision_exact": true,
+    "sector_files_40": true,
+    "top_border_new_area": true,
+    "left_border": true,
+    "roads_free_new_area": true,
+    "rocks_cliff_new_area": true,
+    "ruins_conditional_new_area": true
+  },
+  "terrain_cells": 5120,
+  "collision_cells": 5120,
+  "overlap_cells_each_layer": 2048,
+  "terrain_counts": {"0": 838, "1": 307, "2": 2913, "8": 644, "10": 418},
+  "collision_counts": {"0": 3915, "3": 644, "5": 143, "6": 418},
+  "terrain_sha256": "4761366821ab36c526dc0a039e2d2742a2595b6c0b0c4e2bda7d7f0920d594d8",
+  "collision_sha256": "96293ae3d14f36b0e9ff271675b77ec49cc070e8118affb781a1075656c04769"
+}

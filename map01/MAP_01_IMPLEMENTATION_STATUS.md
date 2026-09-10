@@ -5,52 +5,28 @@
 ## Для чего выполняется эта работа
 Собрать большую цельную карту ручной композиции по утверждённому визуальному эталону и запустить её на Sega Mega Drive с плавной камерой, без видимой процедурной «плитки» и без длинной загрузки всей карты целиком.
 
-Эта работа является частью **R3** и ведётся до полного production-ready состояния Map 01. Общий R3-трекер: `../R3_MAP01_PRODUCTION_PIPELINE.md`.
-
 ## Основа — зафиксировано
 - главный WORLD_ART: точный утверждённый master 1536×1152;
 - без масштабирования и регенерации;
 - 108 технических секторов по 128×128, границы игрок не должен видеть;
-- старый план 4096×3072 / 192 сектора отменён;
-- старый художественный R3 background не является целевой картой; используется только проверенная техническая база камеры/рендера.
+- скрипты допускаются только для технической нарезки, переноса уже принятых ручных решений, конвертации и проверки;
+- автоматическая классификация изображения и процедурная генерация географии не используются;
+- `main` не изменять до явной пользовательской приёмки новой карты и R3.
 
-## Z01 — центральная деревня
-- WORLD_ART: DONE;
-- TERRAIN + COLLISION: DONE;
-- OBJECTS + EVENTS: DONE;
-- SPAWN/runtime: DONE;
-- потоковый вывод WORLD_ART и SGDK/BlastEm technical proof: DONE;
-- финальная пользовательская приёмка как части всей карты: PENDING.
+## Z01 — Центральная деревня
+WORLD_ART, TERRAIN/COLLISION, OBJECTS/EVENTS, SPAWN/runtime и отдельный SGDK/BlastEm proof — DONE. Финальная пользовательская приёмка как части полной карты — PENDING.
 
-## Z03 — северный водопад — ПОЛНЫЙ КОНВЕЙЕР ЗОНЫ ЗАВЕРШЁН
-- production crop: `[384,0,1152,512]`, 768×512;
-- 24 сектора 128×128;
-- WORLD_ART: DONE;
-- TERRAIN/COLLISION: DONE, 6144+6144 ячеек;
-- overlap с Z01: 2560 ячеек каждого слоя cell-for-cell PASS;
-- OBJECTS/EVENTS: DONE;
-- SPAWN/runtime: DONE, 12 spawn points, второго PLAYER_START нет;
-- северный мост и bridge-event имеют одного owner Z01;
-- общий runtime router Z01+Z03: DONE;
-- host C syntax `-Wall -Wextra -Werror`: PASS;
-- Z01↔Z03 integration check: PASS — routing, overlap, seam data, bridge ownership и transition anchors проверены.
+## Z03 — Северный водопад
+Полный конвейер зоны — DONE. Z01↔Z03 integration check — PASS.
 
-## Z02 — северо-западные руины
-- WORLD_ART scope: **DONE V1**;
-- production crop: `[0,0,640,512]`, 640×512;
-- 20 технических секторов 128×128;
-- crop pixel-identical утверждённому master: PASS;
-- масштабирование: нет;
-- новая генерация: нет;
-- процедурная география: нет;
-- восточный край намеренно перекрывает стык с готовыми Z03/Z01;
-- следующий шаг: **ручная TERRAIN + COLLISION разметка Z02**.
-
-## Текущий следующий шаг
-**Z02 — TERRAIN/COLLISION manual authoring.**
-После него: `OBJECTS/EVENTS → SPAWN/runtime → integration check`, затем следующая связанная зона.
+## Z02 — Северо-западные руины
+- WORLD_ART scope: DONE V1, exact crop `[0,0,640,512]`;
+- TERRAIN/COLLISION: **DONE V1 / QA REVIEWED**;
+- 80×64 = 5120 ячеек/слой, 20 sector-пар;
+- западная новая часть размечена вручную;
+- overlap Z02↔Z03: 2048 ячеек/слой, cell-for-cell PASS;
+- image auto-classification: NO; procedural geography: NO;
+- следующий шаг: **OBJECTS + EVENTS Z02**.
 
 ## Правило против зацикливания
-Каждый участок проходит конечный конвейер один раз. Повторные CI/BlastEm-прогоны выполняются только при реальной регрессии либо пакетно после нескольких связанных зон. CI — средство проверки, а не самостоятельная цель.
-
-`main` не изменять/не сливать до явной пользовательской приёмки новой карты и R3.
+`WORLD_ART scope → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → integration check → next zone`.
