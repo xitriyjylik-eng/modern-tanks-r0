@@ -1,0 +1,28 @@
+{
+  "connections": [
+    {"id":"R01","kind":"MAIN_ROAD","from":"Z01","to":"Z02","via_px":[[1700,1440],[1300,1250],[980,1020]]},
+    {"id":"R02","kind":"MAIN_ROAD","from":"Z01","to":"Z03","via_px":[[1960,1300],[1900,1060],[1900,780]]},
+    {"id":"R03","kind":"MAIN_ROAD","from":"Z01","to":"Z04","via_px":[[2440,1270],[2840,990],[3180,760]]},
+    {"id":"R04","kind":"MAIN_ROAD","from":"Z01","to":"Z05","via_px":[[2570,1450],[2860,1370],[3110,1320]]},
+    {"id":"R05","kind":"MAIN_ROAD","from":"Z01","to":"Z06","via_px":[[2620,1600],[3140,1580],[3440,1760]]},
+    {"id":"R06","kind":"SECONDARY_ROAD","from":"Z01","to":"Z07","via_px":[[2450,1880],[2820,2170],[3160,2460]]},
+    {"id":"R07","kind":"MAIN_ROAD","from":"Z01","to":"Z08","via_px":[[1940,1880],[1800,2150],[1680,2380]]},
+    {"id":"R08","kind":"SECONDARY_ROAD","from":"Z01","to":"Z09","via_px":[[1600,1770],[1220,1930],[840,2160]]},
+    {"id":"R09","kind":"MAIN_ROAD","from":"Z01","to":"Z10","via_px":[[1530,1580],[1230,1530],[950,1500]]},
+    {"id":"R10","kind":"SECONDARY_ROAD","from":"Z01","to":"Z11","via_px":[[2170,1930],[2290,2180],[2400,2500]]},
+    {"id":"R11","kind":"SECONDARY_ROAD","from":"Z02","to":"Z10","via_px":[[690,1000],[820,1280]]},
+    {"id":"R12","kind":"SECONDARY_ROAD","from":"Z05","to":"Z06","via_px":[[3260,1430],[3380,1600]]}
+  ],
+  "landmarks": [
+    {"id":"LM_NORTH_BRIDGE","type":"BRIDGE","position_px":[1900,1060]},
+    {"id":"LM_EAST_BRIDGE","type":"BRIDGE","position_px":[3140,1580]},
+    {"id":"LM_WATERFALL","type":"LANDMARK","position_px":[2000,260]},
+    {"id":"LM_FOREST_LAKE","type":"LANDMARK","position_px":[520,2240]}
+  ],
+  "region_exits": [
+    {"id":"EXIT_N","edge":"N","position_px":[2000,0],"target_region":"REGION_2","status":"RESERVED"},
+    {"id":"EXIT_E","edge":"E","position_px":[4095,1500],"target_region":"REGION_2","status":"RESERVED"},
+    {"id":"EXIT_S","edge":"S","position_px":[2000,3071],"target_region":"REGION_2","status":"RESERVED"},
+    {"id":"EXIT_W","edge":"W","position_px":[0,1500],"target_region":"REGION_2","status":"RESERVED"}
+  ]
+}
