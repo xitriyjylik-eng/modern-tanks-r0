@@ -1,0 +1,12 @@
+{
+  "map_id": "REGION_1_MAP_01",
+  "master_size_px": [4096, 3072],
+  "sector_grid": [16, 12],
+  "sector_count_found": 192,
+  "zone_count": 11,
+  "connection_count": 12,
+  "region_exit_count": 4,
+  "errors": [],
+  "warnings": [],
+  "status": "PASS"
+}
