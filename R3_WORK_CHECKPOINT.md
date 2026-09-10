@@ -1,151 +1,68 @@
 # Modern Tanks R3 — рабочая точка продолжения
 
-Дата фиксации: 2026-09-10
-Рабочая ветка: `r3-map-camera`
-Ветка `main`: **НЕ ИЗМЕНЕНА**, остаётся на принятом R2 до отдельной пользовательской приёмки R3.
+Дата фиксации: 2026-09-10  
+Рабочая ветка: `map01-implementation-v1`  
+`main`: **НЕ ИЗМЕНЯТЬ** до явной пользовательской приёмки R3.
 
-## Итог по этапам 1–10
+## Текущий статус R3
+R3: **IN PROGRESS / MAP 01 PRODUCTION / NOT ACCEPTED**.
 
-### Этапы 1–3 — ресурсы, SGDK, компиляция: PASS
-- статическая Region 1 и transport chunks проверены;
-- SGDK image: `registry.gitlab.com/doragasu/docker-sgdk:v2.11`;
-- image digest: `sha256:327ab838fbdf6bc741c6a7a11ee3c937cf1aaf1dc07a475995e89b741b6a830d`;
-- ResComp 3.95;
-- `m68k-elf-gcc -m68000`;
-- `main.c`, resources, linker, objcopy и sizebnd проходят успешно.
+Старый R3-кандидат 1024×768 технически доказал battle renderer, HUD, плавную камеру, MAP lifecycle и устойчивость в BlastEm, но его художественная карта отклонена пользователем. Поэтому он остаётся только технической базой и не является финальной картой R3.
 
-### Этап 4 — первоначальная reproducibility: PASS
-Первоначальный R3 ROM до HUD-fix собирался byte-for-byte одинаково. После HUD-fix окончательная reproducibility повторена на Этапе 9.
+Техническая база, которую сохраняем:
+- battlefield 224×192, right HUD 96×192, bottom log 320×32;
+- fixed-point acceleration/friction камеры;
+- PAL/NTSC compensation;
+- `MAP_scrollTo()` / MAP streaming foundation;
+- корректный MAP create/release lifecycle;
+- HUD opacity fix;
+- SGDK 2.11 build foundation;
+- реальный BlastEm NTSC/PAL deep test и 12m45s soak старой технической базы — PASS.
 
-### Этап 5 — ROM audit: PASS WITH DOCUMENTED SGDK WARNINGS
-- reset PC и stack ABI корректны;
-- SEGA header присутствует;
-- SGDK checksum проверяется независимо;
-- остаются только два стандартных предупреждения SGDK 2.11: его XOR-fold checksum не равен classic additive checksum; default header ROM end = 1 MiB при физическом ROM 256 KiB.
+Старые художественные показатели вроде процента совпадения тайлов с R2 больше не используются как критерий качества.
 
-### Этап 6 — runtime smoke: PASS
-BlastEm подтвердил TITLE -> MENU -> BATTLE, движение карты и возврат BATTLE -> MENU. На этом этапе был найден HUD bleed через прозрачный системный font background.
+## Что теперь входит в R3
+R3 ведёт весь конечный производственный маршрут Map 01:
+1. эталон и география;
+2. production structure;
+3. WORLD_ART по зонам;
+4. TERRAIN + COLLISION;
+5. OBJECTS + EVENTS;
+6. SPAWN + runtime data;
+7. интеграция всей карты в streaming renderer;
+8. плавность камеры, соседние sector loads, seams и latency;
+9. финальный NTSC/PAL regression + soak;
+10. пользовательская визуальная/игровая приёмка.
 
-### Этап 7 — глубокая камера NTSC/PAL: PASS
-- LEFT/RIGHT/UP/DOWN;
-- диагонали;
-- acceleration/friction;
-- отсутствие залипания;
-- отсутствие wrap;
-- scroll bounds: `X=0..800`, `Y=0..576`;
-- camera failures: `[]`.
+Подробный трекер: `R3_MAP01_PRODUCTION_PIPELINE.md`.
 
-### Этап 8 — HUD/графический regression fix: PASS
-HUD bleed устранён непрозрачными glyph cells с формой default font SGDK 2.11.
-Проверенный игровой source/payload commit: `65893b6f9a760748147c8f59eba335593c69fc1a`.
+## Актуальная художественная и техническая база Map 01
+- authoritative WORLD_ART: 1536×1152;
+- без масштабирования и регенерации;
+- техническая сетка: 12×9 = 108 секторов 128×128;
+- старый план 4096×3072 / 192 сектора отменён;
+- процедурная генерация мира запрещена;
+- если единый SGDK MAP ухудшает качество или задерживает вход, применять sector/page streaming, а не упрощать графику.
 
-Финальный Stage 8 emulator run:
-- run: `34432690670`, run #7;
-- job: `102731314266`;
-- artifact: `10135106474`;
-- 40 кадров NTSC + 40 кадров PAL;
-- `max_bottom_changed_pixels = 0`;
-- `max_right_static_changed_pixels = 0`;
-- `coordinate_foreign_pixels_total = 0`;
-- `static_text_foreign_pixels_total = 0`;
-- HUD failures: `[]`.
+## Прогресс зон
+### Z01 — Центральная деревня
+WORLD_ART → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → отдельный SGDK/BlastEm proof: **DONE**.
 
-Камера после HUD-fix повторно PASS:
-- NTSC steady RIGHT ≈ `88.2353 px/s`, coast `13 px`;
-- PAL steady RIGHT ≈ `92.0502 px/s`, coast `15 px`;
-- PAL/NTSC ratio ≈ `1.04324`;
-- bounds `X=0..800`, `Y=0..576`.
+### Z03 — Северный водопад / верхняя река / северный мост
+- WORLD_ART scope 768×512: **DONE**;
+- TERRAIN/COLLISION 96×64 cells: **DONE V2**;
+- overlap с Z01: 2560 cells/layer inherited cell-for-cell — **PASS**;
+- 24 sector-пары terrain/collision подготовлены;
+- validation: **PASS**;
+- следующий шаг: **OBJECTS + EVENTS**.
 
-### Этап 9 — финальная reproducibility + regression + упаковка: PASS
+Остальные зоны идут последовательно после интеграционной проверки текущей зоны.
 
-Финальный GitHub Actions build:
-- workflow: `R3 Static Region Smooth Camera SGDK CI`;
-- run id: `34434756996`, run #171;
-- job id: `102737407791`;
-- artifact id: `10135767228`;
-- artifact digest: `sha256:bc6d10abb6ea64fbce7502c1261a3e80ed958ff88b0914a8837fc554b2a81ee7`.
+## Правило против зацикливания
+Каждая зона проходит только конечный конвейер:
+`WORLD_ART scope → TERRAIN/COLLISION → OBJECTS/EVENTS → SPAWN/runtime → integration check → next zone`.
 
-Финальный ROM:
-- size: `262144 bytes`;
-- SHA-256: `94285501cd6cb72e909c31676a52c14da01f8e72b960e34636689768e13ed293`;
-- Build A/B byte-for-byte PASS;
-- SGDK checksum/audit PASS WITH DOCUMENTED WARNINGS;
-- этот же SHA прошёл Stage 8 BlastEm NTSC/PAL camera + HUD tests.
+CI, fuzzy similarity и вспомогательные screenshot-метрики — только инструменты диагностики. Они не являются отдельным этапом и не должны задерживать создание карты без реальной регрессии.
 
-Static map:
-- playable: `1024x768`;
-- runtime map: `1024x1024` с safety padding;
-- battle HUD: `320x224` overlay geometry;
-- exact accepted R2 landscape tile occurrences: `12074 / 12288` = `98.258%`;
-- runtime procedural generation: `false`.
-
-Stage 9 полный архив:
-- `Modern_Tanks_FULL_PROJECT_R3_STAGE9_FINAL_CANDIDATE_2026-09-10.zip`;
-- SHA-256: `bd5537bf451e5339a29faf78a5549d597d071cd7e0e9f4508295878b6c4cf23b`;
-- ZIP integrity PASS.
-
-### Этап 10 — длительная реальная emulator soak-проверка: ЗАВЕРШЁН / PASS
-
-Инструменты Stage 10:
-- `sgdk/tools/run_r3_stage10_soak.sh`;
-- `sgdk/tools/analyze_r3_stage10_soak.py`;
-- `.github/workflows/r3-stage10-soak.yml`.
-
-Финальный GitHub Actions soak:
-- workflow: `R3 Stage 10 Long Emulator Soak`;
-- run id: `34435644570`, run #1;
-- job id: `102740016693`;
-- tested head: `373b40117160db8777ee373c5e56ae2d01b28af1`;
-- artifact id: `10136353463`;
-- artifact ZIP digest: `sha256:c55126214d69424bb463e9c4c4db44bd51aac96b14c92352f2011af994ad7fb6`;
-- artifact files: `191`;
-- workflow conclusion: `success`.
-
-Перед soak жёстко проверено, что запущен именно финальный ROM:
-- SHA-256 required/actual: `94285501cd6cb72e909c31676a52c14da01f8e72b960e34636689768e13ed293`;
-- size: `262144 bytes`;
-- ROM audit errors: `[]`.
-
-Реальный BlastEm 0.6.3.4 soak:
-- NTSC/U: `633` секунд непрерывного runtime, `48` полных циклов `MENU -> BATTLE -> movement -> MENU`;
-- PAL/E: `132` секунды дополнительной регрессии, `10` полных циклов;
-- суммарное emulator runtime: `765` секунд = **12 минут 45 секунд**;
-- суммарно: **58 полных циклов загрузки/выгрузки battle MAP**;
-- сохранено и автоматически проверено `180` battle/moved/menu/initial screenshots;
-- все циклы прошли с живым процессом BlastEm, без crash/hang.
-
-Screenshot/runtime analyzer:
-- NTSC `battle_reset_diff_max = 0.0`;
-- PAL `battle_reset_diff_max = 0.0`;
-- NTSC `moved_field_diff_min = 0.901088...`;
-- PAL `moved_field_diff_min = 0.901088...`;
-- NTSC `menu_return_diff_max = 0.0160017` (допуск учитывает принятую ambient-анимацию меню);
-- PAL `menu_return_diff_max = 0.0198242`;
-- black/corrupt frame failures: `0`;
-- combined failures: `[]`;
-- combined status: `PASS`.
-
-Ручная перепроверка последних реальных кадров также выполнена: NTSC cycle 48 battle/moved/menu и PAL cycle 10 moved визуально корректны; карта продолжает двигаться, HUD остаётся цельным, возврат в главное меню нормальный.
-
-Диагностика host RSS BlastEm:
-- NTSC: `134296 -> 143180 KiB`, рост `8884 KiB`;
-- PAL: `136144 -> 148504 KiB`, рост `12360 KiB`.
-Это **не** прямое измерение 64 KiB Mega Drive RAM и поэтому не используется как доказательство/опровержение утечки игрового heap. Практический leak-stress обеспечен 58 повторными MAP create/release + resource reload циклами: истощения игрового heap, отказа входа в battle или повреждения кадров не произошло.
-
-Локально скачанный Stage 10 artifact дополнительно проверен `unzip -t`: PASS, `191` файлов. Встроенный `rom.bin` побайтово имеет тот же SHA-256, что Stage 9 candidate.
-
-**Итог Этапа 10: технические этапы R3 1–10 завершены. Длительный реальный emulator soak PASS. Кандидат технически готов к пользовательской проверке. R3 всё ещё НЕ ACCEPTED/CLOSED, пока пользователь сам не подтвердит внешний вид/ощущение камеры и загрузку.**
-
-## Следующий шаг
-
-Только пользовательская приёмка на его эмуляторе:
-1. запустить финальный ROM SHA-256 `94285501...ed293`;
-2. визуально оценить карту относительно главного меню;
-3. оценить время входа в battle;
-4. оценить плавность камеры руками;
-5. если есть дефект — исправлять отдельным новым кандидатом;
-6. если пользователь явно подтверждает приёмку — только тогда можно пометить R3 `ACCEPTED/CLOSED` и отдельно решать вопрос переноса в `main`.
-
-## Правило
-
-Не менять `main` и не объявлять R3 принятым без явного пользовательского подтверждения.
+## Acceptance gate
+R3 становится `ACCEPTED/CLOSED` только когда целевая Map 01 полностью работает на финальном runtime, камера и загрузка приемлемы, финальный NTSC/PAL regression/soak пройден и пользователь явно подтвердил внешний вид и ощущения.
