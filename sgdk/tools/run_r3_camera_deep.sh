@@ -7,6 +7,7 @@ mkdir -p "$OUT_ROOT"
 export DISPLAY=:99
 export SDL_AUDIODRIVER=dummy
 export LIBGL_ALWAYS_SOFTWARE=1
+export SDL_VIDEODRIVER=x11
 
 XVFB_PID=''
 EMU_PID=''
@@ -18,7 +19,24 @@ trap cleanup_all EXIT
 
 Xvfb :99 -screen 0 800x600x24 -nolisten tcp >"$OUT_ROOT/xvfb.log" 2>&1 &
 XVFB_PID=$!
-sleep 1
+X_READY=0
+for _ in $(seq 1 100); do
+  if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+    echo 'Xvfb exited before becoming ready' >&2
+    cat "$OUT_ROOT/xvfb.log" >&2 || true
+    exit 1
+  fi
+  if xdotool getmouselocation >/dev/null 2>&1; then
+    X_READY=1
+    break
+  fi
+  sleep 0.1
+done
+if [ "$X_READY" -ne 1 ]; then
+  echo 'Xvfb did not become ready within 10 seconds' >&2
+  cat "$OUT_ROOT/xvfb.log" >&2 || true
+  exit 1
+fi
 
 run_case() {
   local name="$1" region="$2"
