@@ -1,0 +1,110 @@
+name: R3 Stage 10 Long Emulator Soak
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r3-map-camera
+    paths:
+      - '.github/workflows/r3-stage10-soak.yml'
+      - 'sgdk/tools/run_r3_stage10_soak.sh'
+      - 'sgdk/tools/analyze_r3_stage10_soak.py'
+      - 'sgdk/tools/r3_ci_overlay_small.py'
+      - 'sgdk/r3ci/main.*.b64'
+
+jobs:
+  soak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+      FINAL_ROM_SHA: 94285501cd6cb72e909c31676a52c14da01f8e72b960e34636689768e13ed293
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SGDK test dependencies and BlastEm
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3 scipy==1.16.2
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool
+
+      - name: Restore exact static R3 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('sgdk/r3ci')
+          expected={
+            0:'88bb1acbdba9f946338d3cb7313ae5629b4d1c7bb38efa8e6fd98afe0101b293',
+            1:'39a455119ee853299e957f1082a931c2d873952fc6840c3f8a48f65dcc2f2868',
+            2:'6b6456e097b5173cc68a03f2221dd33f07d09a94f35af454924d00c6ed14c4e8',
+            3:'4b7559e86a513c59e5a572e3c5e0118d3372fbca243ec32cc18d43d749d7cda5',
+            4:'bbdde87db66c04d2983b67949f8357400affa1a5e5ca8b5718ef11a90cd9d3ee',
+            5:'06aa0243144b644515d82de32a091b5d21fb1031a072a41d3c90119256bd7dce',
+          }
+          def sha(s): return hashlib.sha256(s.encode('ascii')).hexdigest()
+          for i,want in expected.items():
+              p=root/f'world.{i:02d}.b64'
+              s=p.read_text(encoding='ascii').strip()
+              if sha(s)!=want and i==4 and len(s)==8001:
+                  hits=[]
+                  for j in range(len(s)):
+                      t=s[:j]+s[j+1:]
+                      if sha(t)==want: hits.append((j,t))
+                  assert len(hits)==1
+                  _,s=hits[0]
+                  p.write_text(s,encoding='ascii')
+              assert sha(s)==want,(i,len(s),sha(s),want)
+          PY
+          python3 sgdk/tools/r3_ci_overlay_small.py restore
+          python3 sgdk/tools/r3_ci_overlay_small.py verify
+          python3 sgdk/tools/build_refined_animation_assets.py >/tmp/r3_ambient.log
+
+      - name: Build and pin exact final ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE" >/tmp/r3_docker_pull.log
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          chmod -R a+rwX sgdk
+          docker run --rm -v "$PWD/sgdk:/m68k" "$ID"
+          test -f sgdk/out/rom.bin
+          ACTUAL="$(sha256sum sgdk/out/rom.bin | awk '{print $1}')"
+          echo "$ACTUAL  sgdk/out/rom.bin" | tee sgdk/out/R3_STAGE10_ROM_SHA256.txt
+          test "$ACTUAL" = "$FINAL_ROM_SHA"
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/R3_STAGE10_ROM_AUDIT.json
+
+      - name: Run 10+ minute real-emulator soak
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash sgdk/tools/run_r3_stage10_soak.sh
+
+      - name: Analyze every soak transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sgdk/tools/analyze_r3_stage10_soak.py
+
+      - name: Publish Stage 10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_STAGE10_Long_Soak_Evidence
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/R3_STAGE10_ROM_SHA256.txt
+            sgdk/out/R3_STAGE10_ROM_AUDIT.json
+            sgdk/out/stage10_soak/**/*.png
+            sgdk/out/stage10_soak/**/*.csv
+            sgdk/out/stage10_soak/**/*.txt
+            sgdk/out/stage10_soak/**/*.json
+            sgdk/out/stage10_soak/**/*.log
+          if-no-files-found: warn
