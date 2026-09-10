@@ -94,32 +94,39 @@ PY
   down() { xdotool keydown --window "$win" "$1"; }
   up() { xdotool keyup --window "$win" "$1"; }
   capture() {
-    local label="$1" ts before newest_line newest
+    local label="$1" ts before newest_line newest trailer
     ts="$(date +%s%3N)"
     before="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 || true)"
     shot_key
     newest_line=''
-    for _ in $(seq 1 40); do
+    for _ in $(seq 1 60); do
       newest_line="$(find "$raw" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 || true)"
       if [ -n "$newest_line" ] && [ "$newest_line" != "$before" ]; then
         newest="${newest_line#* }"
-        cp "$newest" "$out/${label}.png"
-        echo "$label,$ts" >> "$out/trace.csv"
-        return 0
+        if [ -s "$newest" ]; then
+          trailer="$(tail -c 12 "$newest" 2>/dev/null | od -An -tx1 | tr -d ' \n' || true)"
+          if [ "$trailer" = '0000000049454e44ae426082' ]; then
+            cp "$newest" "$out/${label}.png"
+            echo "$label,$ts" >> "$out/trace.csv"
+            return 0
+          fi
+        fi
       fi
       sleep 0.05
     done
-    echo "$name: screenshot timeout for $label" >&2
-    find "$raw" -maxdepth 1 -type f -printf '%T@ %p\n' | sort -nr >&2 || true
+    echo "$name: complete PNG timeout for $label" >&2
+    find "$raw" -maxdepth 1 -type f -printf '%T@ %s %p\n' | sort -nr >&2 || true
     return 1
   }
 
-  sleep 1.5
-  pad_tap Return
-  sleep 1.1
-  capture 00_menu
-  pad_tap Return
-  sleep 1.2
+  # Record whatever boot screen is visible, then enter battle robustly. Extra START presses
+  # are harmless in TEST_BATTLE, while this avoids a missed one-frame input on a busy runner.
+  sleep 2.5
+  capture 00_boot
+  for _ in 1 2 3; do
+    pad_tap Return
+    sleep 0.75
+  done
   capture 01_start
 
   down Right
