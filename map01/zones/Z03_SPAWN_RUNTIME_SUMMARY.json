@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-10",
+  "status": "PASS",
+  "stage": "Z03_SPAWN_RUNTIME_V1",
+  "spawn_count": 12,
+  "spawn_types": {
+    "ZONE_ENTRY": 3,
+    "NPC": 3,
+    "VEHICLE": 2,
+    "ENEMY": 2,
+    "EFFECT": 2
+  },
+  "active_player_starts_in_z03": 0,
+  "sector_count": 24,
+  "runtime_terrain_bytes": 6144,
+  "runtime_collision_bytes": 6144,
+  "owned_object_count": 8,
+  "owned_event_count": 7,
+  "shared_z01_object_refs": 1,
+  "shared_z01_event_refs": 1,
+  "z01_overlap_cells_each_layer": 2560,
+  "z01_overlap_terrain_exact": true,
+  "z01_overlap_collision_exact": true,
+  "host_c_syntax_check": "PASS",
+  "corrections": {
+    "bridge_owner": "Z01",
+    "duplicate_z03_bridge_removed": true,
+    "duplicate_z03_bridge_event_removed": true,
+    "canonical_bridge_world_bounds": [727, 326, 843, 362],
+    "canonical_bridge_anchor_world": [785, 344],
+    "east_exit_aligned_to_actual_road": true,
+    "south_transition_moved_to_zone_corridor": true
+  },
+  "next": "ONE_Z01_Z03_INTEGRATION_CHECK_THEN_NEXT_ZONE"
+}
