@@ -1,1 +1,0 @@
-R2 native indexed assets are stored directly as binary Git blobs. Do not reintroduce the old base64 chunk transport.
