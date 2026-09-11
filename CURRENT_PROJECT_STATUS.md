@@ -16,9 +16,11 @@ Updated: 2026-09-11
 ## Rules
 - Build the world primarily by hand. Scripts/generators are for deterministic slicing, conversion, validation and already-authored coordinates, not procedural world design.
 - `main` remains the accepted R0–R2 baseline until explicit owner acceptance of R3.
-- Old 1024×768 R3 candidate, old Stage 9 acceptance-ready status, and stale handoff/next-scope documents are obsolete and must not be treated as instructions.
+- Old 1024×768 R3 candidate, old Stage 9/10 status, and stale handoff/next-scope documents are obsolete and must not be treated as instructions.
 - Current runtime/toolchain additions on this branch are infrastructure only; they do not change the Map 01 content checkpoint.
+
+## Transitional runtime dependency
+`sgdk/src/main.c` and the `r3_region1_*` resources still contain the old 1024×768 renderer path. They are retained only because the current build still depends on them while Map 01 runtime integration is incomplete. They are not a design/art source and must be replaced by the Map 01 runtime path, not extended.
 
 ## Current checkpoint
 Base content checkpoint: `12f9d9675ac45e062c68a5097d59a52e46c03e57` — Z02 terrain/collision complete.
-Current branch head also includes pinned SGDK/BlastEm bootstrap workflows.
