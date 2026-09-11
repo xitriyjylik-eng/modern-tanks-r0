@@ -1,0 +1,50 @@
+name: R3 Toolchain Bootstrap
+
+on:
+  push:
+    branches:
+      - r3-live-map01-rom-v1
+    paths:
+      - '.github/workflows/r3-toolchain-bootstrap.yml'
+  workflow_dispatch:
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download pinned SGDK 2.11 and m68k GCC 13.2.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r3-toolchain
+          cd /tmp/r3-toolchain
+          curl -L --fail --retry 4 -o sgdk-v2.11-linux-x86_64.tar.gz \
+            https://github.com/ulalume/sgdk-native-builds/releases/download/v2.11/sgdk-v2.11-linux-x86_64.tar.gz
+          curl -L --fail --retry 4 -o m68k-elf-toolchain-gcc13.2.0-linux-x86_64.tar.gz \
+            https://github.com/ulalume/m68k-toolchain-builds/releases/download/gcc13.2.0-1/m68k-elf-toolchain-gcc13.2.0-linux-x86_64.tar.gz
+          echo '351a4c4d1b6a0930d10bb529ac2274e4875aba1bf94b646ce16332b8b7b05ff8  sgdk-v2.11-linux-x86_64.tar.gz' | sha256sum -c -
+          echo '5540f36310990f64f699a47094fba4bdf078adef279f4f0ec54bac3b101b5bf9  m68k-elf-toolchain-gcc13.2.0-linux-x86_64.tar.gz' | sha256sum -c -
+          tar -xzf sgdk-v2.11-linux-x86_64.tar.gz -C /tmp/r3-toolchain
+          tar -xzf m68k-elf-toolchain-gcc13.2.0-linux-x86_64.tar.gz -C /tmp/r3-toolchain
+          find /tmp/r3-toolchain -type f -name 'm68k-elf-gcc' -print
+          find /tmp/r3-toolchain -type f -name 'rescomp.jar' -print
+
+      - name: Package verified toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp
+          tar -czf r3-sgdk-toolchain-bundle.tar.gz r3-toolchain
+          sha256sum r3-sgdk-toolchain-bundle.tar.gz > r3-sgdk-toolchain-bundle.tar.gz.sha256.txt
+
+      - name: Upload verified toolchain bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: r3-sgdk-toolchain-bundle
+          path: |
+            /tmp/r3-sgdk-toolchain-bundle.tar.gz
+            /tmp/r3-sgdk-toolchain-bundle.tar.gz.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
