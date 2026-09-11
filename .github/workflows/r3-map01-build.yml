@@ -1,0 +1,145 @@
+name: R3 Map01 Runtime Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r3-live-map01-rom-v1
+    paths:
+      - '.github/workflows/r3-map01-build.yml'
+      - 'sgdk/**'
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      SGDK_IMAGE: registry.gitlab.com/doragasu/docker-sgdk:v2.11
+      MAP01_SOURCE_COMMIT: 12f9d9675ac45e062c68a5097d59a52e46c03e57
+      MAP01_SOURCE_SHA256: 1dd78e5373fa826d2bdbbc49e747931bb645f3731702ee140171ad77f24c1bcb
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore approved Map01 art and build native stream data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0 numpy==2.3.3
+          git show "${MAP01_SOURCE_COMMIT}:map01/art/MAP01_WORLD_ART_MASTER_SOURCE.png" > sgdk/res/map01_world_source.png
+          echo "${MAP01_SOURCE_SHA256}  sgdk/res/map01_world_source.png" | sha256sum -c -
+          python3 sgdk/tools/build_map01_stream_assets.py \
+            sgdk/res/map01_world_source.png sgdk/res --preview
+          rm -f sgdk/res/map01_world_source.png
+          test -s sgdk/res/map01_world_tiles.bin
+          test -s sgdk/res/map01_world_tile_palettes.bin
+          test -s sgdk/res/map01_world_palette.bin
+
+      - name: Build ROM with SGDK 2.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$SGDK_IMAGE" >/tmp/sgdk_pull.log
+          ID="$(docker image inspect "$SGDK_IMAGE" --format '{{.Id}}')"
+          chmod -R a+rwX sgdk
+          docker run --rm -v "$PWD/sgdk:/m68k" "$ID"
+          test -f sgdk/out/rom.bin
+          sha256sum sgdk/out/rom.bin | tee sgdk/out/MAP01_ROM_SHA256.txt
+          python3 sgdk/tools/verify_rom.py sgdk/out/rom.bin | tee sgdk/out/MAP01_ROM_AUDIT.json
+
+      - name: Boot Map01 and capture proof screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends blastem xvfb xdotool
+          OUT="$PWD/sgdk/out/map01_smoke"
+          RAW="$RUNNER_TEMP/map01-shots"
+          HOME_DIR="$RUNNER_TEMP/map01-home"
+          mkdir -p "$OUT" "$RAW" "$HOME_DIR/.config/blastem"
+          CFG_SRC="$(dpkg -L blastem | grep -E '/default\.cfg$' | head -n1 || true)"
+          if [ -n "$CFG_SRC" ]; then
+            cp "$CFG_SRC" "$HOME_DIR/.config/blastem/blastem.cfg"
+          else
+            printf 'ui {\n screenshot_path %s\n screenshot_template map01_%%Y%%m%%d_%%H%%M%%S.png\n}\n' "$RAW" > "$HOME_DIR/.config/blastem/blastem.cfg"
+          fi
+          python3 - "$HOME_DIR/.config/blastem/blastem.cfg" "$RAW" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]); raw=sys.argv[2]
+          s=p.read_text(errors='replace')
+          if re.search(r'(?m)^\s*screenshot_path\s+',s):
+              s=re.sub(r'(?m)^\s*screenshot_path\s+.*$',f'\tscreenshot_path {raw}',s)
+          else:
+              s=s.replace('ui {',f'ui {{\n\tscreenshot_path {raw}',1)
+          if not re.search(r'(?m)^\s*screenshot_template\s+',s):
+              s=s.replace('ui {','ui {\n\tscreenshot_template map01_%Y%m%d_%H%M%S.png',1)
+          p.write_text(s)
+          PY
+          export HOME="$HOME_DIR"
+          export DISPLAY=:99
+          export SDL_AUDIODRIVER=dummy
+          export LIBGL_ALWAYS_SOFTWARE=1
+          Xvfb :99 -screen 0 640x480x24 -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
+          XVFB_PID=$!
+          trap 'kill ${EMU_PID:-0} ${XVFB_PID:-0} 2>/dev/null || true' EXIT
+          sleep 1
+          blastem -g -r U sgdk/out/rom.bin 320 224 >"$OUT/blastem.log" 2>&1 &
+          EMU_PID=$!
+          WIN=''
+          for _ in $(seq 1 80); do
+            WIN="$(xdotool search --onlyvisible --name 'BlastEm' 2>/dev/null | head -n1 || true)"
+            [ -n "$WIN" ] && break
+            sleep 0.1
+          done
+          test -n "$WIN"
+          xdotool windowfocus "$WIN" || true
+          tap() { xdotool keydown --window "$WIN" "$1"; sleep 0.18; xdotool keyup --window "$WIN" "$1"; }
+          shot() {
+            local label="$1" before after newest
+            before="$(find "$RAW" -maxdepth 1 -type f -name '*.png' | wc -l)"
+            tap p
+            for _ in $(seq 1 30); do
+              after="$(find "$RAW" -maxdepth 1 -type f -name '*.png' | wc -l)"
+              if [ "$after" -gt "$before" ]; then
+                newest="$(find "$RAW" -maxdepth 1 -type f -name '*.png' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+                cp "$newest" "$OUT/${label}.png"
+                return 0
+              fi
+              sleep 0.1
+            done
+            return 1
+          }
+          sleep 1.2
+          shot 01_title
+          tap Return
+          sleep 0.8
+          shot 02_menu
+          tap Return
+          sleep 2.0
+          shot 03_map01_start
+          xdotool keydown --window "$WIN" Right
+          sleep 1.0
+          xdotool keyup --window "$WIN" Right
+          sleep 0.5
+          shot 04_map01_right
+          test -s "$OUT/03_map01_start.png"
+
+      - name: Publish ROM and Map01 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modern_Tanks_R3_MAP01_RUNTIME
+          path: |
+            sgdk/out/rom.bin
+            sgdk/out/MAP01_ROM_SHA256.txt
+            sgdk/out/MAP01_ROM_AUDIT.json
+            sgdk/out/map01_smoke/*.png
+            sgdk/out/map01_smoke/*.log
+            sgdk/res/map01_world_stream_meta.json
+            sgdk/res/map01_world_genesis_preview.png
+          if-no-files-found: warn
+          retention-days: 14
