@@ -1,0 +1,34 @@
+name: R3 BlastEm Export
+
+on:
+  push:
+    branches:
+      - r3-live-map01-rom-v1
+    paths:
+      - '.github/workflows/r3-emulator-export.yml'
+  workflow_dispatch:
+
+jobs:
+  export-emulator:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download pinned BlastEm debug build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p emulator
+          curl -fL --retry 4 --retry-delay 2 \
+            -o emulator/blastem-linux-x86_64-0.6.3-pre-59207bed6304.tar.gz \
+            https://github.com/ulalume/blastem/releases/download/build-59207bed6304/blastem-linux-x86_64-0.6.3-pre-59207bed6304.tar.gz
+          echo '79b8bcb6c326413b2b08949a35cbf86828fb57606e25456d22cfc21b32d4d8a5  emulator/blastem-linux-x86_64-0.6.3-pre-59207bed6304.tar.gz' | sha256sum -c -
+          sha256sum emulator/* > emulator/SHA256SUMS.txt
+          ls -lh emulator
+      - name: Upload pinned BlastEm
+        uses: actions/upload-artifact@v4
+        with:
+          name: R3_BLASTEM_DEBUG_59207BED6304_LINUX_X86_64
+          path: emulator/
+          if-no-files-found: error
+          retention-days: 7
